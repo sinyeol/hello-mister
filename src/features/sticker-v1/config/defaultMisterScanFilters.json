@@ -1,0 +1,66 @@
+{
+  "version": 1,
+  "misterScan": {
+    "minGameFileSizeBytes": 7168,
+    "roots": [
+      "/media/fat/games",
+      "/media/fat/_Arcade",
+      "/media/fat/_Console",
+      "/media/fat/_Computer",
+      "/media/fat/cifs",
+      "/media/network",
+      "/media/usb*"
+    ],
+    "ignoredDirectories": [
+      ".",
+      "..",
+      "_alternatives",
+      "_disabled",
+      "docs",
+      "manuals",
+      "samples",
+      "$RECYCLE.BIN",
+      "System Volume Information"
+    ],
+    "includedExtensions": [
+      ".mra",
+      ".nes",
+      ".sfc",
+      ".smc",
+      ".md",
+      ".gen",
+      ".bin",
+      ".cue",
+      ".chd",
+      ".zip",
+      ".gb",
+      ".gbc",
+      ".gba",
+      ".pce",
+      ".iso",
+      ".vhd",
+      ".dsk",
+      ".rom",
+      ".neo"
+    ],
+    "excludedExtensions": [
+      ".txt",
+      ".png",
+      ".jpg",
+      ".jpeg",
+      ".json",
+      ".xml",
+      ".ini",
+      ".cfg",
+      ".bak",
+      ".old",
+      ".tmp"
+    ],
+    "tinyFileAllowedExtensions": [
+      ".mra"
+    ],
+    "skipFilesAtOrBelowBytes": 7168,
+    "platformImportMode": "selectedOnly",
+    "newPlatformBehavior": "ask"
+  }
+}

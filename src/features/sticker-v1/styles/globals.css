@@ -1,0 +1,162 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  color: #171717;
+  background: #f5f7fb;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+::selection {
+  background: rgb(37 99 235 / 0.18);
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.image-thumb-frame {
+  background-color: #f3f4f6;
+  background-image:
+    linear-gradient(45deg, #d1d5db 25%, transparent 25%),
+    linear-gradient(-45deg, #d1d5db 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #d1d5db 75%),
+    linear-gradient(-45deg, transparent 75%, #d1d5db 75%);
+  background-position:
+    0 0,
+    0 8px,
+    8px -8px,
+    -8px 0;
+  background-size: 16px 16px;
+  border: 1px solid rgb(0 0 0 / 0.18);
+}
+
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 0;
+  }
+
+  html,
+  body {
+    background: #ffffff;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 297mm !important;
+    min-width: 0 !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  body * {
+    visibility: hidden !important;
+  }
+
+  .print-output-area,
+  .print-output-area * {
+    visibility: visible !important;
+  }
+
+  .hm-sheet-scroll {
+    /* preview-only vertical scroll container must never clip or shrink the printed sheets */
+    max-height: none !important;
+    overflow: visible !important;
+    border: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+  }
+
+  .hm-page-zoom {
+    /* per-sheet preview zoom (width-based) must never affect printed output */
+    width: 100% !important;
+  }
+
+  .print-output-area {
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 297mm !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    box-sizing: border-box !important;
+  }
+
+  .print-output-area > section {
+    width: 297mm !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    outline: 0 !important;
+    border: 0 !important;
+    overflow: visible !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .print-output-area > section > * {
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .print-output-area .grid {
+    display: block !important;
+    gap: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 297mm !important;
+    height: auto !important;
+  }
+
+  .print-sheet-page {
+    width: 297mm !important;
+    height: 210mm !important;
+    box-sizing: border-box !important;
+    break-after: page;
+    page-break-after: always;
+    margin: 0 !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .print-output-area > section:last-child .print-sheet-page:last-child {
+    break-after: auto;
+    page-break-after: auto;
+  }
+
+  .print-sheet-page > .relative {
+    width: 297mm !important;
+    height: 210mm !important;
+    aspect-ratio: auto !important;
+    box-sizing: border-box !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .print-sheet-title,
+  .print-hidden {
+    display: none !important;
+  }
+}
