@@ -216,6 +216,22 @@ function cardImageBaseDir() {
   return path.join(appOwnRootDir(), cardImageFolderName);
 }
 
+// 카드에 저장된 이미지 절대경로가 더는 유효하지 않을 때(포터블 폴더를 다른 드라이브·PC로 옮겨 E: → G: 로 바뀐 경우)
+// 앱이 직접 보관하는 card-images 폴더의 파일이면 현재 위치에서 같은 파일명으로 다시 찾아준다.
+// 저장된 경로 문자열 자체는 고치지 않는다 — 이미지 캐시 키가 경로 기반이라 바꾸면 기존 카드의 이미지 연결이 끊긴다.
+async function resolveMovedAppImagePath(requestedPath) {
+  try {
+    if ((await fs.stat(requestedPath)).isFile()) return requestedPath;
+  } catch { /* 원래 경로에 없으면 아래에서 현재 폴더를 찾아본다 */ }
+  const normalized = String(requestedPath).replace(/\\/g, '/').toLowerCase();
+  if (!normalized.includes('/' + cardImageFolderName + '/')) return requestedPath;
+  const candidate = path.join(cardImageBaseDir(), path.basename(requestedPath));
+  try {
+    if ((await fs.stat(candidate)).isFile()) return candidate;
+  } catch { /* 그래도 없으면 원래 경로를 그대로 돌려 기존 오류 메시지를 유지한다 */ }
+  return requestedPath;
+}
+
 function sanitizeCardImageBaseName(name) {
   const cleaned = String(name || '')
     .replace(/[\\/:*?"<>|]/g, ' ')
@@ -4756,7 +4772,7 @@ function registerIpc() {
     try {
       const requestedPath = typeof payload?.filePath === 'string' ? payload.filePath : '';
       if (!requestedPath) return { ok: false, error: 'Missing file path.' };
-      const filePath = path.resolve(requestedPath);
+      const filePath = await resolveMovedAppImagePath(path.resolve(requestedPath));
       const mimeType = mimeTypeForImagePath(filePath);
       if (!mimeType) return { ok: false, error: 'Unsupported image file type.' };
       const stat = await fs.stat(filePath);
