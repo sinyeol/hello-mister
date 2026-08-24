@@ -151,6 +151,8 @@ export interface DesktopRuntimeEnvironment {
   appName: string;
   appVersion: string;
   appDataPath?: string;
+  /** true면 포터블 실행 — 데이터가 exe 옆 Hello-Mister-Data 폴더에 저장됩니다. */
+  portable?: boolean;
   electronApiAvailable: boolean;
   readOnlyIpcAvailable: boolean;
   romTransferLocked: boolean;

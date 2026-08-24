@@ -2,7 +2,7 @@
 import { Buffer } from 'node:buffer';
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
-import { createReadStream, createWriteStream, existsSync } from 'node:fs';
+import { createReadStream, createWriteStream, existsSync, mkdirSync, unlinkSync, writeFileSync } from 'node:fs';
 import net from 'node:net';
 import dns from 'node:dns';
 import os from 'node:os';
@@ -12,6 +12,29 @@ import { execFile } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { promisify, TextDecoder } from 'node:util';
 import { CONTROLLER_FS_CHANNELS } from './controller-ipc-channels.mjs';
+
+// 포터블(무설치) 실행이면 모든 앱 데이터를 exe 옆 폴더에 둔다 — 외장하드/USB에 통째로 넣고 다닐 수 있도록.
+// electron-builder portable exe는 %TEMP%\<무작위>에 풀려서 실행되므로 app.getPath('exe')는 임시 폴더를 가리킨다.
+// 사용자가 실제로 보는 exe 위치는 PORTABLE_EXECUTABLE_DIR 환경변수로만 알 수 있다.
+// setPath는 app ready 이전(= 이 시점)에 호출해야 하고, 단일 인스턴스 락보다 먼저 지정해야
+// 포터블본과 설치/개발본이 서로 다른 데이터를 각자 열 수 있다.
+const portableExeDir = String(process.env.PORTABLE_EXECUTABLE_DIR || '').trim();
+let portableDataDir;
+if (portableExeDir) {
+  const candidate = path.join(portableExeDir, 'Hello-Mister-Data');
+  try {
+    // 읽기 전용 매체(잠긴 USB, 광학 드라이브 등)일 수 있으므로 실제로 써보고 판단한다.
+    mkdirSync(candidate, { recursive: true });
+    const probe = path.join(candidate, '.write-test');
+    writeFileSync(probe, 'ok');
+    unlinkSync(probe);
+    portableDataDir = candidate;
+    app.setPath('userData', candidate);
+  } catch (error) {
+    // 쓸 수 없으면 기본 위치(AppData)로 조용히 되돌아간다 — 앱이 못 뜨는 것보다 낫다.
+    console.error('[Hello Mister] 포터블 데이터 폴더를 쓸 수 없어 기본 위치를 사용합니다:', error);
+  }
+}
 
 // 같은 userData를 두 인스턴스가 동시에 열면 IndexedDB(LevelDB)가 잠겨 라이브러리가 빈 것처럼 보입니다.
 // 두 번째 실행은 즉시 종료하고 기존 창을 포커스해 데이터 손상/유실 착시를 막습니다.
@@ -176,12 +199,21 @@ function appDataPath(...segments) {
 
 const cardImageFolderName = 'card-images';
 
+// 앱이 자체 파일(카드 이미지 아카이브, SD 이미지 캐시, 플래시 작업 폴더, Zaparoo 다운로드 캐시)을 두는 루트.
+// - 포터블: exe 옆 Hello-Mister-Data (외장하드째로 들고 다닐 수 있게)
+// - 포터블인데 그 폴더에 쓸 수 없을 때: userData(AppData). app.getPath('exe')로 폴백하면 안 된다 —
+//   포터블 exe는 %TEMP%\<무작위>에 풀려 돌기 때문에 다운로드/아카이브가 조용히 임시 폴더로 들어가 사라진다.
+// - 설치/일반 패키징본: exe 폴더(asar은 읽기 전용이라 app.getAppPath()를 쓸 수 없음)
+// - 개발 실행: 프로젝트 폴더
+function appOwnRootDir() {
+  if (portableDataDir) return portableDataDir;
+  if (portableExeDir) return app.getPath('userData');
+  return app.isPackaged ? path.dirname(app.getPath('exe')) : app.getAppPath();
+}
+
 // Base folder the dropped card images are archived into: an image folder inside the app's own folder.
-// In dev that is the project root; in a packaged build it is the (writable) install dir next to the exe
-// (app.getAppPath() points at the read-only asar there, so fall back to the exe directory).
 function cardImageBaseDir() {
-  const appRoot = app.isPackaged ? path.dirname(app.getPath('exe')) : app.getAppPath();
-  return path.join(appRoot, cardImageFolderName);
+  return path.join(appOwnRootDir(), cardImageFolderName);
 }
 
 function sanitizeCardImageBaseName(name) {
@@ -282,6 +314,7 @@ function getRuntimeEnvironment() {
     appName,
     appVersion: app.getVersion(),
     appDataPath: app.getPath('userData'),
+    portable: Boolean(portableDataDir),
     electronApiAvailable: true,
     readOnlyIpcAvailable: true,
     romTransferLocked: true,
@@ -3901,8 +3934,7 @@ const MR_FUSION_SOURCES = {
 // 다운로드/작업 파일은 userData(C:\AppData)가 아니라 앱 폴더 하위에 둔다(card-images와 동일 규칙).
 // dev=프로젝트 루트, packaged=exe 옆 설치 폴더.
 function appOwnSubdir(name) {
-  const appRoot = app.isPackaged ? path.dirname(app.getPath('exe')) : app.getAppPath();
-  return path.join(appRoot, name);
+  return path.join(appOwnRootDir(), name);
 }
 
 function sdImageCacheDir() {

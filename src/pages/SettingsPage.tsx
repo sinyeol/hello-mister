@@ -45,6 +45,11 @@ export function SettingsPage() {
             <StatusBadge label={formatTransferLockStatus(environment)} tone="dry" />
           </div>
           <p className="muted">버전: {environment?.appVersion || '확인 중'}</p>
+          {environment?.appDataPath && (
+            <p className="muted">
+              데이터 폴더{environment.portable ? ' (포터블 — exe 옆에 저장)' : ''}: <code>{environment.appDataPath}</code>
+            </p>
+          )}
           <div className="action-row">
             <button className="button" onClick={() => void refreshDesktopStatus()}><RefreshCw size={16} /> 상태 새로고침</button>
           </div>
