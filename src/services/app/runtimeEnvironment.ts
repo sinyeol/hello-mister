@@ -4,7 +4,7 @@ export function createBrowserRuntimeEnvironment(): DesktopRuntimeEnvironment {
   return {
     mode: 'browser-fallback',
     appName: 'Hello Mister v2.1',
-    appVersion: '2.1.0',
+    appVersion: '2.1.1',
     electronApiAvailable: false,
     readOnlyIpcAvailable: false,
     romTransferLocked: true,

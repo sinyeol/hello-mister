@@ -471,7 +471,7 @@ export function createDiagnosticPackage(input: {
   errors?: string[];
 }): DiagnosticPackage {
   return stripDiagnosticSecrets({
-    appVersion: '2.1.0',
+    appVersion: '2.1.1',
     createdAt: new Date().toISOString(),
     profile: input.profile
       ? {

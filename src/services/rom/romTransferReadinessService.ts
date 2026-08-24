@@ -28,7 +28,7 @@ const baseItems: Array<Omit<RomTransferReadinessItem, 'status'>> = [
 export function createDefaultReadinessChecklist(): RomTransferReadinessChecklist {
   return {
     schemaVersion: 1,
-    appVersion: '2.1.0',
+    appVersion: '2.1.1',
     updatedAt: new Date().toISOString(),
     items: baseItems.map((item) => ({ ...item, status: 'unchecked' })),
     canConsiderRealTransfer: false,

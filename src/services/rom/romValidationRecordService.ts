@@ -43,7 +43,7 @@ export function createValidationRecord(input: {
   const record: RomDryRunValidationRecord = {
     validationSessionId: input.session.sessionId,
     schemaVersion: 1,
-    appVersion: '2.1.0',
+    appVersion: '2.1.1',
     createdAt: input.session.createdAt,
     updatedAt: now,
     targetProfileId: input.session.targetProfileId,

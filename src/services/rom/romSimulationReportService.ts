@@ -14,7 +14,7 @@ export function createSimulationRecord(session: RomSimulatedTransferSession): Ro
   const record: RomSimulatedTransferRecord = {
     simulationRecordId: session.sessionId,
     schemaVersion: 1,
-    appVersion: '2.1.0',
+    appVersion: '2.1.1',
     createdAt: session.createdAt,
     updatedAt: session.updatedAt,
     targetAlias: session.targetAlias,

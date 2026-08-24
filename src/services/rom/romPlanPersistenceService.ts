@@ -37,7 +37,7 @@ export function createSavedRomPlan(result: RomDryRunResult, options: RomPlanExpo
     metadata: {
       id: masked.plan.planId,
       schemaVersion: 1,
-      appVersion: '2.1.0',
+      appVersion: '2.1.1',
       createdAt: masked.plan.createdAt,
       updatedAt: now,
       title: title || `ROM dry-run 계획 ${now.slice(0, 10)}`,
