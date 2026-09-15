@@ -260,4 +260,11 @@ export interface MiSTerCardMetadata {
   resolvedMiSTerPath?: string;
   nfcPayload?: string;
   nfcPayloadSource?: MiSTerPathResolutionSource;
+  // Facts copied from the library entry (arcade database) so a card can print them without a live connection.
+  misterGenre?: string;
+  misterReleaseYear?: string;
+  misterManufacturer?: string;
+  misterPlayers?: string;
+  misterRegion?: string;
+  misterNumButtons?: number;
 }

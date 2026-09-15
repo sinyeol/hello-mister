@@ -19,6 +19,7 @@ import { isTemplateShapeLayer } from '@sticker-v1/utils/templateShapes';
 import { imageCropInsetPercent, type ImageNaturalSize } from '@sticker-v1/utils/imageCrop';
 import { layerEffectStyle } from '@sticker-v1/utils/layerEffects';
 import { normalizeTemplateForRender } from '@sticker-v1/utils/templateRenderNormalize';
+import { cardSlotText } from '@sticker-v1/utils/cardTemplateText';
 
 interface CardPreviewProps {
   card: CardItem;
@@ -80,18 +81,6 @@ function imageTransformStyle(
     clipPath: `inset(${cropInset.top}% ${cropInset.right}% ${cropInset.bottom}% ${cropInset.left}%)`,
     borderRadius: imageCornerRadiusCss(layer, template.canvas, { width: transform.width, height: transform.height }),
   };
-}
-
-function slotText(layer: TemplateLayer, card: CardItem, side: 'front' | 'back') {
-  if (layer.slotType === 'categoryLabel') return side === 'front' ? card.front.categoryLabel : card.back.categoryLabel;
-  if (layer.slotType === 'platformLabel') return card.front.platformLabel;
-  if (layer.slotType === 'brandText') return 'Hello Mister';
-  if (layer.slotType === 'titleText') return card.front.titleText;
-  if (layer.slotType === 'gameLogo') return card.front.titleText;
-  if (layer.slotType === 'platformLogo') return card.front.platformLabel;
-  if (layer.slotType === 'heroImage' || layer.slotType === 'mainImage' || layer.slotType === 'backgroundArt' || layer.slotType === 'background') return '이미지 없음';
-  if (layer.data?.text) return String(layer.data.text);
-  return layer.slot?.label ?? layer.slotType ?? '';
 }
 
 function slotAsset(layer: TemplateLayer, card: CardItem, assetsById: Record<string, LocalAsset>, side: 'front' | 'back') {
@@ -246,7 +235,7 @@ export function CardPreview({
           const asset = imageDataUrl ? undefined : slotAsset(layer, card, assetsById, side);
           const imageTransform = getTemplateLayerImageTransform(layer, card, side);
           if (side === 'back' && (imageDataUrl || asset)) logBackTemplateImageDiagnostics(card, template, layer, imageTransform);
-          const text = slotText(layer, card, side);
+          const text = cardSlotText(layer, card, side);
           return (
             <div
               key={layer.id}

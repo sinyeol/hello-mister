@@ -41,6 +41,25 @@ export function orientationFromRotation(rotation: number | undefined): 'horizont
 
 export type ArcadeMetadataFields = Partial<Pick<MiSTerScanEntry, 'genre' | 'releaseYear' | 'manufacturer' | 'orientation' | 'metadataSource' | 'arcade'>>;
 
+// Facts copied from a library entry onto a card's stored MiSTer metadata, so the card can print them later
+// without the MiSTer (or the library) being available. Structural input: works for scan and library entries.
+export function cardFactsFromLibraryEntry(entry: {
+  genre?: string;
+  releaseYear?: string;
+  manufacturer?: string;
+  region?: string;
+  arcade?: ArcadeGameMetadata;
+}) {
+  return {
+    misterGenre: entry.genre,
+    misterReleaseYear: entry.releaseYear,
+    misterManufacturer: entry.manufacturer,
+    misterPlayers: entry.arcade?.players,
+    misterRegion: entry.arcade?.region ?? entry.region,
+    misterNumButtons: entry.arcade?.numButtons,
+  };
+}
+
 // Scan-entry fields learned from the arcade database for one MRA. Without a database entry only the core /
 // setname identity is recorded (metadataSource stays undefined so the merge keeps any existing metadata).
 export function arcadeMetadataForEntry(rbf: string | undefined, setname: string | undefined, entry: ArcadeDatabaseEntry | undefined): ArcadeMetadataFields {

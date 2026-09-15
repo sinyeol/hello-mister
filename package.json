@@ -18,7 +18,7 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview --host 127.0.0.1",
     "lint": "eslint .",
-    "test": "npm run test:ini && npm run test:fingerprint && npm run test:sd-flash && npm run test:task-queue && npm run test:phase-two && npm run test:phase-three && npm run test:phase-four && npm run test:phase-five && npm run test:phase-six && npm run test:phase-seven && npm run test:phase-eight && npm run test:phase-nine && npm run test:phase-ten && npm run test:phase-eleven && npm run test:phase-twelve && npm run test:phase-thirteen && npm run test:phase-fourteen && npm run test:phase-fifteen && npm run test:phase-sixteen && npm run test:phase-seventeen && npm run test:phase-eighteen && npm run test:phase-nineteen && npm run test:phase-twenty && npm run test:phase-twenty-one && npm run test:phase-twenty-two && npm run test:phase-twenty-three && npm run test:phase-twenty-four && npm run test:phase-twenty-five && npm run test:sticker-sheet && npm run test:sticker-print && npm run test:sticker-assets && npm run test:sticker-album && npm run test:sticker-platforms && npm run test:sticker-arcade-db",
+    "test": "npm run test:ini && npm run test:fingerprint && npm run test:sd-flash && npm run test:task-queue && npm run test:phase-two && npm run test:phase-three && npm run test:phase-four && npm run test:phase-five && npm run test:phase-six && npm run test:phase-seven && npm run test:phase-eight && npm run test:phase-nine && npm run test:phase-ten && npm run test:phase-eleven && npm run test:phase-twelve && npm run test:phase-thirteen && npm run test:phase-fourteen && npm run test:phase-fifteen && npm run test:phase-sixteen && npm run test:phase-seventeen && npm run test:phase-eighteen && npm run test:phase-nineteen && npm run test:phase-twenty && npm run test:phase-twenty-one && npm run test:phase-twenty-two && npm run test:phase-twenty-three && npm run test:phase-twenty-four && npm run test:phase-twenty-five && npm run test:sticker-sheet && npm run test:sticker-print && npm run test:sticker-assets && npm run test:sticker-album && npm run test:sticker-platforms && npm run test:sticker-arcade-db && npm run test:sticker-card-link",
     "test:ini": "node scripts/test-real-ini-manager.mjs",
     "test:fingerprint": "node scripts/test-fingerprint-format.mjs",
     "test:sd-flash": "node scripts/test-sd-flash-dry-run.mjs",
@@ -52,7 +52,8 @@
     "test:sticker-assets": "node scripts/test-sticker-asset-groups.mjs",
     "test:sticker-album": "node scripts/test-sticker-card-album.mjs",
     "test:sticker-platforms": "node scripts/test-sticker-platform-identity.mjs",
-    "test:sticker-arcade-db": "node scripts/test-sticker-arcade-database.mjs"
+    "test:sticker-arcade-db": "node scripts/test-sticker-arcade-database.mjs",
+    "test:sticker-card-link": "node scripts/test-sticker-card-link-and-text.mjs"
   },
   "build": {
     "appId": "com.hellomister.app",

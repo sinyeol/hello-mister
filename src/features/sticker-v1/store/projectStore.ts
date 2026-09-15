@@ -17,6 +17,7 @@ import { regenerateSavedCardThumbnail } from '@sticker-v1/services/cards/cardThu
 import { generateCardsFromProject } from '@sticker-v1/services/cards/generateCards';
 import { loadPersistedGames, persistGames } from '@sticker-v1/services/games/gamePersistence';
 import { emptyMameMapping, clearMameMapping, persistMameMapping } from '@sticker-v1/services/mame/mameMapping';
+import { cardFactsFromLibraryEntry } from '@sticker-v1/services/mister/arcadeDatabase';
 import { matchMiSTerEntryImages } from '@sticker-v1/services/mister/misterImageMatching';
 import { loadMiSTerState, persistMiSTerState } from '@sticker-v1/services/mister/misterPersistence';
 import { summarizeMiSTerEntries } from '@sticker-v1/services/mister/misterScan';
@@ -258,6 +259,7 @@ function gameFromMiSTerEntry(entry: MiSTerScanEntry, categories: Category[], zap
         resolvedMiSTerPath: launchPreview.resolvedMiSTerPath,
         nfcPayload: launchPreview.nfcPayload,
         nfcPayloadSource: launchPreview.resolutionSource,
+        ...cardFactsFromLibraryEntry(entry),
       },
     },
   };
@@ -330,6 +332,13 @@ function miSTerEntryFromZaparooEntry(entry: ZaparooLibraryEntry): MiSTerScanEntr
     launchReady: entry.launchReady,
     pathValid: entry.pathValid,
     aliasApplied: entry.aliasApplied,
+    // Carry the arcade-database facts so a card created from this entry can store and print them.
+    genre: entry.genre,
+    releaseYear: entry.releaseYear,
+    manufacturer: entry.manufacturer,
+    orientation: entry.orientation,
+    metadataSource: entry.metadataSource,
+    arcade: entry.arcade,
     scannedAt: entry.lastSyncedAt,
   };
 }

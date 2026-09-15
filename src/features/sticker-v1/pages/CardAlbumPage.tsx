@@ -45,6 +45,8 @@ import type {
   ZaparooLibraryEntry,
 } from '@sticker-v1/types';
 import type { ZaparooRunDiagnostics } from '../../../types/zaparoo';
+import { rankCardLinkCandidates } from '@sticker-v1/utils/cardLinkCandidates';
+import { cardFactsFromLibraryEntry } from '@sticker-v1/services/mister/arcadeDatabase';
 
 const trashPlatformKey = '__trash__';
 const allCardsKey = '__all_cards__';
@@ -1085,6 +1087,7 @@ export function CardAlbumPage() {
       resolvedMiSTerPath: launchPreview.resolvedMiSTerPath,
       nfcPayload: launchPreview.nfcPayload,
       nfcPayloadSource: launchPreview.resolutionSource,
+      ...cardFactsFromLibraryEntry(entry),
     };
   }
 
@@ -1157,6 +1160,36 @@ export function CardAlbumPage() {
     setFeedback({
       type: repaired > 0 ? 'success' : 'error',
       message: `끊긴 링크 ${broken.length}개 중 ${repaired}개 복구${ambiguous > 0 ? `, ${ambiguous}개는 후보가 모호해 카드의 링크 아이콘으로 직접 선택하세요. 끊긴 링크 카드만 표시합니다` : ''}.`,
+    });
+  }
+
+  // Copy the library's game facts (manufacturer / year / genre / players / region) onto already-saved cards, so
+  // cards made before the arcade database existed can print them through the {manufacturer} style text tokens.
+  async function refreshCardGameFacts() {
+    const linked = activeIndex
+      .map((item) => ({ item, entry: resolveLinkedEntry(item) }))
+      .filter((pair): pair is { item: CardAlbumIndexItem; entry: ZaparooLibraryEntry } => Boolean(pair.entry));
+    if (linked.length === 0) {
+      setFeedback({ type: 'error', message: '게임과 연결된 카드가 없습니다. 먼저 카드를 게임에 연결하세요.' });
+      return;
+    }
+    let updated = 0;
+    for (const { item, entry } of linked) {
+      const facts = cardFactsFromLibraryEntry(entry);
+      const unchanged = (Object.keys(facts) as Array<keyof typeof facts>).every((key) => (item.mister?.[key] ?? undefined) === (facts[key] ?? undefined));
+      if (unchanged) continue;
+      const record = await loadSavedCardFullData(item.id);
+      if (!record?.mister) continue;
+      const misterMetadata = { ...record.mister, ...facts };
+      updateSavedCard(record.id, { mister: misterMetadata, card: { ...record.card, mister: misterMetadata } });
+      updateIndexItem(record.id, { mister: misterMetadata, updatedAt: new Date().toISOString() });
+      updated += 1;
+    }
+    setFeedback({
+      type: 'success',
+      message: updated > 0
+        ? `연결된 카드 ${linked.length}개 중 ${updated}개에 제조사·연도·장르 정보를 새로 채웠습니다.`
+        : `연결된 카드 ${linked.length}개의 게임 정보가 이미 최신입니다.`,
     });
   }
 
@@ -1351,23 +1384,18 @@ export function CardAlbumPage() {
     });
   }
 
-  // Ranked candidates for the link picker: exact title > prefix > title-contains > any-field-contains.
+  // Ranked candidates for the link picker. A broken card still remembers its platform, path and title, so
+  // candidates are ranked by closeness to THAT card; what the user types outranks the remembered values.
   const linkCandidates = useMemo(() => {
     if (!linkPicker) return [];
-    const query = normalizeName(linkQuery);
-    const scored: Array<{ entry: ZaparooLibraryEntry; score: number }> = [];
-    for (const entry of zaparooLibrary.entries) {
-      const title = normalizeName(entry.title);
-      let score = -1;
-      if (!query) score = 0;
-      else if (title === query) score = 4;
-      else if (title.startsWith(query)) score = 3;
-      else if (title.includes(query)) score = 2;
-      else if (normalizeName(`${entry.systemId} ${entry.romName} ${entry.relativePath}`).includes(query)) score = 1;
-      if (score >= 0) scored.push({ entry, score });
-    }
-    scored.sort((a, b) => b.score - a.score || a.entry.title.localeCompare(b.entry.title));
-    return scored.slice(0, 60).map((candidate) => candidate.entry);
+    const item = linkPicker.item;
+    return rankCardLinkCandidates(zaparooLibrary.entries, {
+      title: item.title,
+      systemId: item.mister?.misterSystemId,
+      platformGroup: item.mister?.misterPlatformGroup,
+      absolutePath: item.mister?.misterAbsolutePath,
+      relativePath: item.mister?.misterRelativePath,
+    }, linkQuery);
   }, [linkPicker, linkQuery, zaparooLibrary.entries]);
 
   // deviceId(별칭/안정 id 포함) → 미스터 표시 이름. 라이브러리 게임이 "어느 미스터에 있는지" 보여주는 데 쓴다.
@@ -1597,6 +1625,11 @@ export function CardAlbumPage() {
           <div className="flex max-h-[80vh] w-full max-w-lg flex-col rounded-lg bg-white p-4 shadow-xl" onClick={(event) => event.stopPropagation()}>
             <p className="text-sm font-semibold text-neutral-900">게임 라이브러리에서 연결할 게임 선택</p>
             <p className="mt-1 truncate text-xs text-neutral-500">카드: {displayCardTitle(linkPicker.item)}</p>
+            {(linkPicker.item.mister?.misterAbsolutePath || linkPicker.item.mister?.misterSystemId) && (
+              <p className="mt-1 truncate text-[11px] text-neutral-500" title={linkPicker.item.mister?.misterAbsolutePath}>
+                이전 연결: {linkPicker.item.mister?.misterSystemId ?? '시스템 미상'} · {linkPicker.item.mister?.misterAbsolutePath ?? '경로 없음'}
+              </p>
+            )}
             <input
               autoFocus
               value={linkQuery}
@@ -1604,13 +1637,18 @@ export function CardAlbumPage() {
               placeholder="제목 / 시스템 / 경로로 검색"
               className="mt-3 w-full rounded-md border border-line px-3 py-2 text-sm"
             />
+            {!linkQuery.trim() && linkCandidates.length > 0 && (
+              <p className="mt-2 text-[11px] text-neutral-500">카드가 기억하는 경로·플랫폼·제목과 가까운 순서입니다.</p>
+            )}
             <div className="mt-2 min-h-0 flex-1 space-y-1 overflow-y-auto">
               {zaparooLibrary.entries.length === 0 ? (
                 <p className="px-1 py-6 text-center text-xs text-neutral-500">게임 라이브러리가 비어 있습니다. 먼저 미스터 게임 리스트에서 스캔하세요.</p>
               ) : linkCandidates.length === 0 ? (
-                <p className="px-1 py-6 text-center text-xs text-neutral-500">검색 결과가 없습니다.</p>
+                <p className="px-1 py-6 text-center text-xs text-neutral-500">
+                  {linkQuery.trim() ? '검색 결과가 없습니다.' : '비슷한 게임을 찾지 못했습니다. 제목이나 경로로 검색하세요.'}
+                </p>
               ) : (
-                linkCandidates.map((entry) => (
+                linkCandidates.map(({ entry, reasons }) => (
                   <button
                     key={entry.id}
                     type="button"
@@ -1622,6 +1660,13 @@ export function CardAlbumPage() {
                     className="flex w-full flex-col gap-0.5 rounded-md border border-line px-3 py-2 text-left hover:bg-blue-50"
                   >
                     <span className="truncate text-sm font-medium text-neutral-900">{entry.title}</span>
+                    {reasons.length > 0 && (
+                      <span className="flex flex-wrap gap-1">
+                        {reasons.map((reason) => (
+                          <span key={reason} className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">{reason}</span>
+                        ))}
+                      </span>
+                    )}
                     <span className="truncate text-[11px] font-medium text-blue-700">미스터: {misterNamesForEntry(entry)}</span>
                     <span className="truncate text-[11px] text-neutral-500">{entry.platformGroup} · {entry.systemId} · {entry.relativePath}</span>
                   </button>
@@ -1713,6 +1758,14 @@ export function CardAlbumPage() {
                 끊긴 링크 복구 ({brokenLinkCount})
               </button>
             )}
+            <button
+              type="button"
+              onClick={() => void refreshCardGameFacts()}
+              className="rounded-md border border-line px-3 py-2 text-sm font-medium hover:bg-neutral-50"
+              title="연결된 게임의 제조사·연도·장르·플레이어 정보를 카드에 다시 채웁니다. 템플릿 텍스트에 {manufacturer} {year} {genre} 토큰을 쓰면 카드에 표시됩니다."
+            >
+              게임 정보 새로고침
+            </button>
             <button
               type="button"
               onClick={sendSelectedToPrint}

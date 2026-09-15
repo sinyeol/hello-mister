@@ -24,6 +24,7 @@ import { imageCropInsetPercent, type ImageNaturalSize } from '@sticker-v1/utils/
 import { isTemplateShapeFillTransparent, isTemplateShapeLayer } from '@sticker-v1/utils/templateShapes';
 import { clampViewportToCanvas, defaultViewportTransform, getFitViewTransform, panViewport, zoomViewportAtPoint, type ViewportTransform } from '@sticker-v1/utils/viewportTransform';
 import { layerEffectStyle } from '@sticker-v1/utils/layerEffects';
+import { cardSlotText } from '@sticker-v1/utils/cardTemplateText';
 
 interface EditableCardTemplatePreviewProps {
   card: CardItem;
@@ -91,18 +92,6 @@ function imageStyle(layer: TemplateLayer, template: Template, transform: ImageTr
     clipPath: `inset(${cropInset.top}% ${cropInset.right}% ${cropInset.bottom}% ${cropInset.left}%)`,
     borderRadius: imageCornerRadiusCss(layer, template.canvas, { width: transform.width, height: transform.height }),
   };
-}
-
-function slotText(layer: TemplateLayer, card: CardItem, side: 'front' | 'back') {
-  if (layer.slotType === 'categoryLabel') return side === 'front' ? card.front.categoryLabel : card.back.categoryLabel;
-  if (layer.slotType === 'platformLabel') return card.front.platformLabel;
-  if (layer.slotType === 'brandText') return 'Hello Mister';
-  if (layer.slotType === 'titleText') return card.front.titleText;
-  if (layer.slotType === 'gameLogo') return card.front.titleText;
-  if (layer.slotType === 'platformLogo') return card.front.platformLabel;
-  if (layer.slotType === 'heroImage' || layer.slotType === 'mainImage' || layer.slotType === 'background') return '이미지 없음';
-  if (layer.data?.text) return String(layer.data.text);
-  return layer.slot?.label ?? layer.slotType ?? '';
 }
 
 function slotAsset(layer: TemplateLayer, card: CardItem, assetsById: Record<string, LocalAsset>, side: 'front' | 'back') {
@@ -587,7 +576,7 @@ export function EditableCardTemplatePreview({
             ) : layer.slotType === 'titleImage' || layer.slotType === 'gameLogo' ? (
               card.front.titleText
             ) : (
-              slotText(layer, card, side)
+              cardSlotText(layer, card, side)
             )}
             </div>
           );
