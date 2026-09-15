@@ -93,4 +93,10 @@ assert.match(persistenceSource, /cardFullData/, 'persistence should include a ca
 assert.match(persistenceSource, /cardThumbnails/, 'persistence should include a cardThumbnails store');
 assert.match(persistenceSource, /deleteCardThumbnailBlobs/, 'permanent delete should remove thumbnail cache records');
 
+// --- link-status view: broken links must be listable, not just counted (2026-09-15) ---
+assert.match(albumPageSource, /useState<'all' \| 'broken' \| 'linked' \| 'none'>\('all'\)/, 'Card Album keeps a link-status filter');
+assert.match(albumPageSource, /링크 끊김 \(\{linkStatusCounts\.broken\}\)/, 'the link filter offers the broken-link view with its count');
+assert.match(albumPageSource, /cardLinkStatus\(activeItemForGroup\(group, versionSelection\)\) === linkFilter/, 'the link filter is applied to the displayed card groups');
+assert.match(albumPageSource, /if \(ambiguous > 0\) setLinkFilter\('broken'\)/, 'bulk repair leaves the album showing the cards that still need a manual pick');
+
 console.log('Sticker card album tests passed.');

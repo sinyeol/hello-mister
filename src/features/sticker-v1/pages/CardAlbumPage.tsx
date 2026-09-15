@@ -845,6 +845,9 @@ export function CardAlbumPage() {
   const [trashSelectedIds, setTrashSelectedIds] = useState<string[]>([]);
   const [selectedPlatform, setSelectedPlatform] = useState('');
   const [albumQuery, setAlbumQuery] = useState('');
+  // Link-status view: 'broken' shows the cards whose stored game link no longer resolves (the ones the bulk repair
+  // could not fix), so they can be re-linked one by one through the card's link icon.
+  const [linkFilter, setLinkFilter] = useState<'all' | 'broken' | 'linked' | 'none'>('all');
   const [albumPage, setAlbumPage] = useState(1);
   const [versionSelection, setVersionSelection] = useState<Record<string, string>>({});
   const [cardSize, setCardSize] = useState(260);
@@ -916,11 +919,26 @@ export function CardAlbumPage() {
 
   useEffect(() => {
     setAlbumPage(1);
-  }, [debouncedAlbumQuery, selectedPlatform]);
+  }, [debouncedAlbumQuery, selectedPlatform, linkFilter]);
 
   useEffect(() => {
     if (selectedPlatform !== trashPlatformKey) setTrashSelectedIds([]);
   }, [selectedPlatform]);
+
+  // Resolve a card to its current library entry. The stored entry id can be stale (e.g. a game's id flipped to
+  // absolute-path based after a rescan), so resolution also falls back to absolute path / system+title.
+  // Declared before the display pipeline because the link-status filter below needs it.
+  const entryLookup = useMemo(() => buildZaparooEntryLookup(zaparooLibrary.entries), [zaparooLibrary.entries]);
+  const resolveLinkedEntry = useCallback((item: CardAlbumIndexItem) => resolveEntryForCardLink({
+    linkedEntryId: item.mister?.zaparooLibraryEntryId,
+    absolutePath: item.mister?.misterAbsolutePath,
+    systemId: item.mister?.misterSystemId,
+    title: item.title,
+  }, entryLookup), [entryLookup]);
+  const cardLinkStatus = useCallback((item: CardAlbumIndexItem): 'linked' | 'broken' | 'none' => {
+    if (!item.mister?.zaparooLibraryEntryId && !item.mister?.misterAbsolutePath) return 'none';
+    return resolveLinkedEntry(item) ? 'linked' : 'broken';
+  }, [resolveLinkedEntry]);
 
   const activeIndex = useMemo(() => albumIndex.filter((item) => !item.deletedAt), [albumIndex]);
   const deletedIndex = useMemo(() => albumIndex.filter((item) => Boolean(item.deletedAt)), [albumIndex]);
@@ -953,13 +971,14 @@ export function CardAlbumPage() {
       ? versionGroups
     : selectedPlatform
       ? selectedPlatformGroups
-      : debouncedAlbumQuery
+      : debouncedAlbumQuery || linkFilter !== 'all'
         ? versionGroups
         : recentGroups;
-  const displayGroups = useMemo(
-    () => filterGroupsByQuery(sourceDisplayGroups, debouncedAlbumQuery),
-    [debouncedAlbumQuery, sourceDisplayGroups],
-  );
+  const displayGroups = useMemo(() => {
+    const byQuery = filterGroupsByQuery(sourceDisplayGroups, debouncedAlbumQuery);
+    if (linkFilter === 'all') return byQuery;
+    return byQuery.filter((group) => cardLinkStatus(activeItemForGroup(group, versionSelection)) === linkFilter);
+  }, [cardLinkStatus, debouncedAlbumQuery, linkFilter, sourceDisplayGroups, versionSelection]);
   const pagedDisplayGroups = useMemo(
     () => paginateItems(displayGroups, albumPage, albumPageSize),
     [albumPage, displayGroups],
@@ -1133,9 +1152,11 @@ export function CardAlbumPage() {
       repaired += 1;
     }
     if (repaired > 0) setZaparooLibrary(library);
+    // Leave the album showing exactly the cards that still need a manual pick.
+    if (ambiguous > 0) setLinkFilter('broken');
     setFeedback({
       type: repaired > 0 ? 'success' : 'error',
-      message: `끊긴 링크 ${broken.length}개 중 ${repaired}개 복구${ambiguous > 0 ? `, ${ambiguous}개는 후보가 모호해 카드의 링크 아이콘으로 직접 선택하세요` : ''}.`,
+      message: `끊긴 링크 ${broken.length}개 중 ${repaired}개 복구${ambiguous > 0 ? `, ${ambiguous}개는 후보가 모호해 카드의 링크 아이콘으로 직접 선택하세요. 끊긴 링크 카드만 표시합니다` : ''}.`,
     });
   }
 
@@ -1330,20 +1351,6 @@ export function CardAlbumPage() {
     });
   }
 
-  // Resolve a card to its current library entry. The stored entry id can be stale (e.g. a game's id flipped to
-  // absolute-path based after a rescan), so resolution also falls back to absolute path / system+title.
-  const entryLookup = useMemo(() => buildZaparooEntryLookup(zaparooLibrary.entries), [zaparooLibrary.entries]);
-  const resolveLinkedEntry = useCallback((item: CardAlbumIndexItem) => resolveEntryForCardLink({
-    linkedEntryId: item.mister?.zaparooLibraryEntryId,
-    absolutePath: item.mister?.misterAbsolutePath,
-    systemId: item.mister?.misterSystemId,
-    title: item.title,
-  }, entryLookup), [entryLookup]);
-  const cardLinkStatus = useCallback((item: CardAlbumIndexItem): 'linked' | 'broken' | 'none' => {
-    if (!item.mister?.zaparooLibraryEntryId && !item.mister?.misterAbsolutePath) return 'none';
-    return resolveLinkedEntry(item) ? 'linked' : 'broken';
-  }, [resolveLinkedEntry]);
-
   // Ranked candidates for the link picker: exact title > prefix > title-contains > any-field-contains.
   const linkCandidates = useMemo(() => {
     if (!linkPicker) return [];
@@ -1378,10 +1385,14 @@ export function CardAlbumPage() {
     const names = Array.from(new Set(entry.sourceDevices.map((id) => misterNameByDeviceId.get(id)).filter((v): v is string => Boolean(v))));
     return names.length ? names.join(', ') : '미스터 정보 없음';
   }
-  const brokenLinkCount = useMemo(
-    () => albumIndex.filter((item) => !item.deletedAt && cardLinkStatus(item) === 'broken').length,
-    [albumIndex, cardLinkStatus],
-  );
+  const linkStatusCounts = useMemo(() => {
+    const counts = { linked: 0, broken: 0, none: 0 };
+    activeIndex.forEach((item) => {
+      counts[cardLinkStatus(item)] += 1;
+    });
+    return counts;
+  }, [activeIndex, cardLinkStatus]);
+  const brokenLinkCount = linkStatusCounts.broken;
 
   // Pick which connected MiSTer to launch/write for this card's linked game (selected target preferred, else
   // the only candidate). Undefined when no connected device has the game → caller uses the active connection.
@@ -1759,7 +1770,7 @@ export function CardAlbumPage() {
             </label>
           </div>
         </div>
-        <div className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
+        <div className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto_auto]">
           <label className="relative block">
             <Search className="pointer-events-none absolute left-2 top-2.5 h-4 w-4 text-neutral-400" />
             <input
@@ -1769,6 +1780,17 @@ export function CardAlbumPage() {
               className="w-full rounded-md border border-line py-2 pl-8 pr-2 text-sm"
             />
           </label>
+          <select
+            value={linkFilter}
+            onChange={(event) => setLinkFilter(event.target.value as typeof linkFilter)}
+            className={`rounded-md border px-2 py-2 text-sm ${linkFilter === 'broken' ? 'border-amber-300 bg-amber-50 text-amber-800' : 'border-line'}`}
+            title="카드와 미스터 게임 리스트의 링크 상태로 카드를 거릅니다."
+          >
+            <option value="all">링크: 전체</option>
+            <option value="broken">링크 끊김 ({linkStatusCounts.broken})</option>
+            <option value="linked">연결됨 ({linkStatusCounts.linked})</option>
+            <option value="none">미연결 ({linkStatusCounts.none})</option>
+          </select>
           <div className="rounded-md border border-line bg-neutral-50 px-3 py-2 text-xs text-neutral-600">
             {fullAlbumReady ? `전체 카드 ${activeIndex.length}개 사용 가능` : 'Loading remaining cards...'}
           </div>
@@ -1776,6 +1798,9 @@ export function CardAlbumPage() {
         {!fullAlbumReady && albumQuery.trim() ? (
           <p className="mt-2 text-xs text-amber-700">전체 카드 색인이 끝나는 동안 최근 카드 20개에서 먼저 검색합니다.</p>
         ) : null}
+        {linkFilter === 'broken' && (
+          <p className="mt-2 text-xs text-amber-700">끊긴 링크 카드만 표시합니다. 각 카드의 링크 아이콘으로 게임을 직접 선택하면 복구됩니다.</p>
+        )}
       </section>
 
       <div className="grid gap-5 lg:grid-cols-[260px_minmax(0,1fr)]">
@@ -1904,7 +1929,7 @@ export function CardAlbumPage() {
               assetsById={assetsById}
               templates={templates}
               trashMode={selectedPlatform === trashPlatformKey}
-              emptyMessage={selectedPlatform === trashPlatformKey ? '삭제된 카드가 없습니다.' : '이 섹션에 저장 카드가 없습니다.'}
+              emptyMessage={selectedPlatform === trashPlatformKey ? '삭제된 카드가 없습니다.' : linkFilter !== 'all' ? '선택한 링크 상태에 해당하는 카드가 없습니다.' : '이 섹션에 저장 카드가 없습니다.'}
               nfcStates={nfcStates}
               generateThumbnail={generateThumbnail}
               onThumbnailLoaded={handleThumbnailLoaded}
