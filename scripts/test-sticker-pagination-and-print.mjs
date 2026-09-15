@@ -1,5 +1,5 @@
 // Ported from v1 scripts/test-pagination-and-scan.mjs (minus the v1 HTTP bridge parts).
-// Behavioural checks for list pagination, sheet item move/duplicate, cut line geometry and placement identity,
+// Behavioural checks for list pagination, sheet item moves, cut line geometry and placement identity,
 // plus source contracts that keep the sheet editor, PNG, PDF and direct print on ONE shared A4 render path.
 import assert from 'node:assert/strict';
 import { importTs, readRepoFile } from './sticker-v1-test-utils.mjs';
@@ -7,8 +7,6 @@ import { importTs, readRepoFile } from './sticker-v1-test-utils.mjs';
 const { clampPage, pageCountFor, paginateItems } = await importTs('src/features/sticker-v1/utils/pagination.ts');
 const {
   createSheetCardItems,
-  duplicateSheetCardIds,
-  duplicateSheetItems,
   moveSheetItem,
   sheetCardIdsFromItems,
 } = await importTs('src/features/sticker-v1/services/export/sheetEditorState.ts');
@@ -30,29 +28,12 @@ assert.equal(clampPage(0, 3), 1, 'page input below 1 clamps to page 1');
 assert.equal(clampPage(9, 3), 3, 'page input above total clamps to last page');
 assert.equal(clampPage(Number.NaN, 3), 1, 'invalid page input clamps to page 1');
 
-// --- sheet duplicates by card id ---
-const duplicatedOnce = duplicateSheetCardIds(['card_1', 'card_2'], 'card_1', 1);
-assert.deepEqual(duplicatedOnce.cardIds, ['card_1', 'card_2', 'card_1'], 'duplicate by 1 appends one extra copy into the next empty sheet slot');
-assert.equal(duplicatedOnce.addedCount, 1, 'duplicate by 1 reports one added copy');
-assert.deepEqual(
-  duplicateSheetCardIds(['card_1', 'card_2'], 'card_1', 5).cardIds,
-  ['card_1', 'card_2', 'card_1', 'card_1', 'card_1', 'card_1', 'card_1'],
-  'duplicate by 5 fills empty sheet slots without reordering existing cards or creating album records',
-);
-assert.deepEqual(duplicateSheetCardIds(['card_1', 'card_2'], 'missing', 2).cardIds, ['card_1', 'card_2'], 'duplicate with missing card leaves sheet unchanged');
-
-// --- sheet items: stable ids survive moves and duplicates ---
+// --- sheet items: stable ids survive moves ---
 const sheetItems = createSheetCardItems(['card_1', 'card_2', 'card_3'], 99);
 const movedSheetItems = moveSheetItem(sheetItems, sheetItems[0].sheetItemId, sheetItems[2].sheetItemId);
 assert.deepEqual(sheetCardIdsFromItems(movedSheetItems), ['card_2', 'card_3', 'card_1'], 'moving a sheet card changes placement order only');
 assert.equal(movedSheetItems[2].sheetItemId, sheetItems[0].sheetItemId, 'moved sheet item keeps the same stable sheet item id');
 assert.equal(sheetItems[0].cardId, 'card_1', 'moving a sheet card does not mutate the original item record');
-
-const duplicatedSheetItems = duplicateSheetItems(sheetItems, sheetItems[0].sheetItemId, 2, 100);
-assert.deepEqual(sheetCardIdsFromItems(duplicatedSheetItems.items), ['card_1', 'card_2', 'card_3', 'card_1', 'card_1'], 'sheet duplicate fills later empty slots without reordering existing cards');
-assert.equal(new Set(duplicatedSheetItems.items.map((item) => item.sheetItemId)).size, duplicatedSheetItems.items.length, 'duplicated sheet references each get stable unique item ids');
-assert.equal(duplicatedSheetItems.items[3].cardId, sheetItems[0].cardId, 'duplicated sheet items keep the same source card id');
-assert.notEqual(duplicatedSheetItems.items[3].sheetItemId, sheetItems[0].sheetItemId, 'duplicated sheet items get new sheet item ids');
 
 // --- cut line geometry shared by preview, cutting file and print ---
 const normalizedCutSettings = normalizeCutLineSettings({

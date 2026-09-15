@@ -169,7 +169,7 @@ function explainTagError(error: unknown, fallback: string) {
   const message = error instanceof Error ? error.message : String(error || fallback);
   const lower = message.toLowerCase();
   if (lower.includes('failed to fetch') || lower.includes('networkerror')) {
-    return '로컬 브리지가 응답하지 않습니다. 패키지 앱 또는 npm run mister:bridge로 bridge health를 먼저 확인하세요.';
+    return 'MiSTer 연결 서비스에 접근할 수 없습니다. Hello Mister 데스크톱 앱에서 실행 중인지 확인한 뒤 MiSTer 연결 메뉴에서 다시 연결하세요.';
   }
   if (lower.includes('connection') && lower.includes('session')) {
     return 'MiSTer 연결이 필요합니다. MiSTer 연결 메뉴에서 연결 상태를 확인하세요.';
@@ -178,7 +178,7 @@ function explainTagError(error: unknown, fallback: string) {
     return 'NFC CLI가 TUI 모드로 실행되었습니다. bridge는 Core API를 우선 사용하고, CLI fallback은 -write 명령만 사용해야 합니다.';
   }
   if (lower.includes('panic: close of closed channel') || lower.includes('zaparoo-core') || lower.includes('flags.post')) {
-    return 'NFC 서비스 CLI 내부 panic이 발생했습니다. 앱/브리지를 재시작한 뒤 다시 시도하세요. 반복되면 MiSTer의 NFC core 업데이트가 필요할 수 있습니다.';
+    return 'NFC 서비스 CLI 내부 panic이 발생했습니다. 앱을 재시작한 뒤 다시 시도하세요. 반복되면 MiSTer의 NFC core 업데이트가 필요할 수 있습니다.';
   }
   if (lower.includes('zaparoo command unavailable') || lower.includes('zaparoo.sh') || lower.includes('adapter') || lower.includes('127')) {
     return 'NFC Core API 또는 CLI fallback command를 사용할 수 없습니다. MiSTer의 NFC 서비스와 /media/fat/Scripts/zaparoo.sh 경로를 확인하세요.';

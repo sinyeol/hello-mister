@@ -7,7 +7,6 @@ import { importTs, installBrowserGlobals } from './sticker-v1-test-utils.mjs';
 installBrowserGlobals();
 
 const {
-  clearActiveSheetPageCardIds,
   clearActiveSheetPageItems,
   createPrintPageDescriptors,
   createSheetCardItems,
@@ -80,11 +79,10 @@ assert.equal(createPrintPageDescriptors(0, 10, 'front').length, 0, 'empty sheets
 
 // --- Clear Sheet: only the active page is emptied ---
 const twentyIds = cardIds(20);
-assert.deepEqual(clearActiveSheetPageCardIds(twentyIds, 0, 10), twentyIds.slice(10), 'clearing page 1 removes only the first 10 slots');
-assert.deepEqual(clearActiveSheetPageCardIds(twentyIds, 1, 10), twentyIds.slice(0, 10), 'clearing page 2 keeps page 1 intact');
-assert.deepEqual(clearActiveSheetPageCardIds(twentyIds, 5, 10), twentyIds, 'clearing a page that does not exist changes nothing');
 const items = createSheetCardItems(twentyIds, 7);
-assert.deepEqual(sheetCardIdsFromItems(clearActiveSheetPageItems(items, 0, 10)), twentyIds.slice(10), 'clearing sheet items removes only the active page items');
+assert.deepEqual(sheetCardIdsFromItems(clearActiveSheetPageItems(items, 0, 10)), twentyIds.slice(10), 'clearing page 1 removes only the first 10 slots');
+assert.deepEqual(sheetCardIdsFromItems(clearActiveSheetPageItems(items, 1, 10)), twentyIds.slice(0, 10), 'clearing page 2 keeps page 1 intact');
+assert.deepEqual(clearActiveSheetPageItems(items, 5, 10), items, 'clearing a page that does not exist changes nothing');
 assert.equal(items.length, 20, 'clear sheet does not mutate the original item list');
 
 // --- Clear Sheet must not touch saved sheets, and the saved-sheet store stays backward compatible ---
@@ -111,7 +109,7 @@ const savedJob = {
 await savePrintSheets([legacySavedSheet, savedJob]);
 const loaded = loadSavedPrintSheets();
 assert.equal(loaded.length, 2, 'saved sheets are persisted');
-clearActiveSheetPageCardIds(twentyIds, 0, 10);
+clearActiveSheetPageItems(items, 0, 10);
 assert.equal(loadSavedPrintSheets().length, 2, 'clear sheet must not delete saved sheets');
 const loadedLegacy = loaded.find((sheet) => sheet.id === 'sheet_legacy_front');
 assert.equal(loadedLegacy.sideMode, 'front', 'legacy per-page saved sheets are upgraded to a sideMode');

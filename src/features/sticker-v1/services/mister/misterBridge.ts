@@ -525,6 +525,9 @@ export class HttpMiSTerBridgeClient implements MiSTerBridgeClient {
   }
 
   async disconnect(connectionId: string) {
+    // Electron: the read-only SSH session is owned by the v2 main process (shared with the active profile), so the
+    // v1 page only drops its own connection id. The HTTP bridge exists only in the browser dev fallback.
+    if (helloMisterDesktopApi()) return { ok: true, disconnected: true };
     return postJson<{ ok: boolean; disconnected: boolean; message?: string }>('/mister/disconnect', { connectionId });
   }
 
@@ -951,7 +954,10 @@ export class HttpMiSTerBridgeClient implements MiSTerBridgeClient {
     };
   }
 
+  // Scan filter config: in Electron it lives in app storage (IndexedDB with a localStorage fallback). The HTTP bridge
+  // config file only existed in the v1 standalone app and remains here as the browser dev fallback.
   async getScanFilterConfig() {
+    if (helloMisterDesktopApi()) return loadBrowserScanFilterConfig();
     try {
       return await postJson<MiSTerScanFilterConfigResult>('/mister/scan-filter-config', { action: 'load' });
     } catch {
@@ -960,6 +966,7 @@ export class HttpMiSTerBridgeClient implements MiSTerBridgeClient {
   }
 
   async resetScanFilterConfig() {
+    if (helloMisterDesktopApi()) return saveBrowserScanFilterConfig(defaultScanFilterConfig as MiSTerScanFilterConfig);
     try {
       return await postJson<MiSTerScanFilterConfigResult>('/mister/scan-filter-config', { action: 'reset' });
     } catch {
@@ -968,6 +975,7 @@ export class HttpMiSTerBridgeClient implements MiSTerBridgeClient {
   }
 
   async saveScanFilterConfig(config: MiSTerScanFilterConfig) {
+    if (helloMisterDesktopApi()) return saveBrowserScanFilterConfig(config);
     try {
       return await postJson<MiSTerScanFilterConfigResult>('/mister/scan-filter-config', { action: 'save', config });
     } catch {
@@ -976,6 +984,9 @@ export class HttpMiSTerBridgeClient implements MiSTerBridgeClient {
   }
 
   async openScanFilterConfigFolder() {
+    if (helloMisterDesktopApi()) {
+      return { ok: false, message: '스캔 필터 설정은 앱 데이터에 저장되므로 열 수 있는 config 폴더가 없습니다. 파일이 필요하면 Export config를 사용하세요.' };
+    }
     return postJson<{ ok: boolean; message?: string }>('/mister/scan-filter-config', { action: 'open-folder' });
   }
 
