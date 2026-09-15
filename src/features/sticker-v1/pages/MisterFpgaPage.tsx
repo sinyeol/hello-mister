@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Database, Layers, Link, Nfc, Play, RefreshCw, Search, Tags } from 'lucide-react';
+import { Database, Layers, Nfc, Play, Search, Tags } from 'lucide-react';
 import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
 import { isAdvancedMode, useAppViewMode } from '../../../services/app/viewMode';
 import { setActiveMisterProfile, useActiveMisterProfile } from '../../../services/mister/activeProfile';
@@ -14,8 +14,7 @@ import { searchZaparooMediaForTitle } from '../../../services/zaparoo/zaparooMed
 import { PageHeader } from '@sticker-v1/components/common/PageHeader';
 import { PaginationControls } from '@sticker-v1/components/common/PaginationControls';
 import { MAX_BATCH_CARD_CREATE_COUNT, batchCardCreateLimitMessage, isBatchCardCreateCountAllowed } from '@sticker-v1/config/cardCreation';
-import { BridgeMiSTerConnectionAdapter, testMiSTerConnection } from '@sticker-v1/services/mister/misterConnection';
-import { getMiSTerBridgeUrl, HttpMiSTerBridgeClient, setMiSTerBridgeUrl, type CustomPlatformScanDiagnostics } from '@sticker-v1/services/mister/misterBridge';
+import { HttpMiSTerBridgeClient, setMiSTerBridgeUrl, type CustomPlatformScanDiagnostics } from '@sticker-v1/services/mister/misterBridge';
 import { MiSTerBridgeTagWriteAdapter, TextExportTagWriteAdapter } from '@sticker-v1/services/mister/tagWriting';
 import { useConnectedMiSTerDevices, resolveLaunchTargetsForEntry, launchTextForDeviceRef, type LaunchTarget } from '@sticker-v1/services/mister/connectedDevices';
 import { buildLaunchPreview, buildLaunchPreviewFromMetadata, buildTagPayload } from '@sticker-v1/services/mister/zaparooLaunch';
@@ -38,7 +37,7 @@ import { normalizeName } from '@sticker-v1/utils/normalizeName';
 import { platformIdentityKeys } from '@sticker-v1/utils/platformNormalization';
 import { isPlayableLibraryEntry, platformHasPlayableEntry } from '@sticker-v1/utils/zaparooDisplayFilters';
 
-type Section = 'connection' | 'sync' | 'browser' | 'tag';
+type Section = 'sync' | 'browser' | 'tag';
 type SortMode = 'title' | 'platform' | 'last-synced' | 'card-created' | 'image-matched';
 type ScanPhase = 'idle' | 'checking' | 'scanning' | 'merging' | 'done' | 'failed';
 type TagUiStatus = 'idle' | 'ready' | 'waiting for tag' | 'writing' | 'written' | 'reading' | 'verified' | 'error' | 'waitingForTag' | 'tagDetected' | 'mismatch' | 'timeout' | 'cancelled';
@@ -120,22 +119,6 @@ function sectionFromPath(pathname: string): Section {
   if (pathname.includes('/stickers/nfc')) return 'tag';
   if (pathname.includes('/stickers/mister/import')) return 'sync';
   return 'browser';
-}
-
-function connectionConfigForRequest(config: MiSTerConnectionConfig) {
-  return {
-    ...config,
-    password: config.authMethod === 'password' ? config.password ?? '1' : config.password,
-  };
-}
-
-function connectionStatusLabel(status: string, hasSession: boolean) {
-  if (hasSession && status === 'connected') return '연결됨';
-  if (status === 'testing') return '연결 중';
-  if (status === 'connected') return '연결됨';
-  if (status === 'failed') return '오류';
-  if (status === 'unavailable') return '연결 불가';
-  return '연결 안 됨';
 }
 
 function statusBadge(label: string, active: boolean, tone: 'success' | 'warning' | 'danger' | 'info' = 'success') {
@@ -542,7 +525,6 @@ export function MisterFpgaPage() {
   const [libraryDragSelecting, setLibraryDragSelecting] = useState(false);
   const [launchMode, setLaunchMode] = useState<MiSTerLaunchMode>('absolute-path');
   const [message, setMessage] = useState('');
-  const [connectionSteps, setConnectionSteps] = useState<Array<{ label: string; state: 'pending' | 'active' | 'done' | 'failed' }>>([]);
   const showHiddenPlatforms = false;
   const [tagEntryId, setTagEntryId] = useState('');
   const [tagGamePickerOpen, setTagGamePickerOpen] = useState(false);
@@ -1111,33 +1093,6 @@ export function MisterFpgaPage() {
     );
   };
 
-  function updateConnectionStep(label: string, state: 'pending' | 'active' | 'done' | 'failed') {
-    setConnectionSteps((current) => {
-      const existingIndex = current.findIndex((step) => step.label === label);
-      if (existingIndex === -1) return [...current, { label, state }];
-      return current.map((step, index) => (index === existingIndex ? { ...step, state } : step));
-    });
-  }
-
-  function updateConnectionConfigForUi(patch: Partial<MiSTerConnectionConfig>) {
-    const nextConfig = { ...mister.connection.config, ...patch };
-    const connectionTargetChanged =
-      (patch.host !== undefined && patch.host !== mister.connection.config.host)
-      || (patch.port !== undefined && patch.port !== mister.connection.config.port)
-      || (patch.username !== undefined && patch.username !== mister.connection.config.username);
-    if (connectionTargetChanged && mister.connection.connectionId) {
-      void new HttpMiSTerBridgeClient().disconnect(mister.connection.connectionId).catch(() => undefined);
-      setMiSTerConnection({
-        status: 'idle',
-        connectionId: undefined,
-        message: `연결 대상이 ${nextConfig.host}:${nextConfig.port}로 변경되어 기존 MiSTer 세션을 닫았습니다. 다시 연결하세요.`,
-      });
-      setConnectionSteps([]);
-      setMessage(`연결 대상이 ${nextConfig.host}:${nextConfig.port}로 변경되었습니다. 연결을 다시 눌러 새 MiSTer에 접속하세요.`);
-    }
-    updateMiSTerConnectionConfig(patch);
-  }
-
   async function resetScanFilterConfig() {
     try {
       const result = await new HttpMiSTerBridgeClient().resetScanFilterConfig();
@@ -1217,55 +1172,6 @@ export function MisterFpgaPage() {
         return;
       }
       setScanFilterMessage('이 실행 모드에서는 config 폴더 열기를 사용할 수 없습니다.');
-    }
-  }
-
-  async function handleConnectionTest() {
-    if (mister.connection.bridgeUrl) setMiSTerBridgeUrl(mister.connection.bridgeUrl);
-    const targetConfig = connectionConfigForRequest(mister.connection.config);
-    if (mister.connection.connectionId) {
-      await new HttpMiSTerBridgeClient().disconnect(mister.connection.connectionId).catch(() => undefined);
-      setMiSTerConnection({ connectionId: undefined, status: 'idle' });
-    }
-    const initialSteps = ['브리지 상태 확인', 'MiSTer 연결', '인증', '필수 경로 확인', 'NFC 서비스 감지', '완료'];
-    setConnectionSteps(initialSteps.map((label, index) => ({ label, state: index === 0 ? 'active' : 'pending' })));
-    setMiSTerConnection({ status: 'testing', bridgeEnabled: true, message: `${targetConfig.host}:${targetConfig.port}에 연결 중... (${mister.connection.bridgeUrl ?? getMiSTerBridgeUrl()})` });
-    const adapter = new BridgeMiSTerConnectionAdapter();
-    try {
-      updateConnectionStep('브리지 상태 확인', 'done');
-      updateConnectionStep('MiSTer 연결', 'active');
-      const result = await testMiSTerConnection(targetConfig, adapter);
-      const connected = result.status === 'connected';
-      updateConnectionStep('MiSTer 연결', connected ? 'done' : 'failed');
-      updateConnectionStep('인증', connected ? 'done' : 'failed');
-      updateConnectionStep('필수 경로 확인', connected ? 'done' : 'failed');
-      updateConnectionStep('NFC 서비스 감지', connected ? 'done' : 'failed');
-      updateConnectionStep('완료', connected ? 'done' : 'failed');
-      setMiSTerConnection({ ...result, lastTestedAt: new Date().toISOString() });
-      setMessage(result.connectionId ? `${targetConfig.host} 연결 완료. 게임 리스트 동기화와 NFC 작업에 사용할 MiSTer 연결이 준비되었습니다.` : (result.message ?? `${targetConfig.host} 연결 완료.`));
-    } catch (error) {
-      const message = `${targetConfig.host} 연결 실패: ${error instanceof Error ? error.message : '연결에 실패했습니다.'}`;
-      updateConnectionStep('완료', 'failed');
-      setMiSTerConnection({ status: 'failed', message, lastTestedAt: new Date().toISOString() });
-      setMessage(message);
-    }
-  }
-
-  async function handleDisconnect() {
-    const connectionId = mister.connection.connectionId;
-    try {
-      if (connectionId) await new HttpMiSTerBridgeClient().disconnect(connectionId);
-      setMiSTerConnection({
-        status: 'idle',
-        connectionId: undefined,
-        message: 'MiSTer 연결이 해제되었습니다. Library Sync와 NFC read/write를 사용하려면 다시 연결하세요.',
-      });
-      setConnectionSteps([]);
-      setMessage('MiSTer 연결이 해제되었습니다.');
-    } catch (error) {
-      const message = error instanceof Error ? error.message : '연결 해제에 실패했습니다.';
-      setMiSTerConnection({ status: 'failed', connectionId: undefined, message });
-      setMessage(message);
     }
   }
 
@@ -2556,7 +2462,6 @@ export function MisterFpgaPage() {
   const tagPayloadPreview = buildTagPayload(currentLaunchText(), { allowRelativePath: launchMode === 'relative-path' });
   const nfcSelected = nfcSelectedDevice();
   const nfcSelectedStatus = nfcSelected ? nfcDeviceStatuses[nfcSelected.deviceId] : undefined;
-  const hasActiveBridgeSession = Boolean(mister.connection.connectionId && mister.connection.status === 'connected');
   const hasActiveMisterConnection = Boolean(effectiveActiveMister?.ipAddress || activeConnectionId());
   // NFC connection readiness uses the SAME single source of truth (active MiSTer profile) as game launch
   // and the sidebar badge, so NFC never claims "연결하세요" while launch works. Reader/API availability
@@ -2574,12 +2479,6 @@ export function MisterFpgaPage() {
     readerCount: nfcSelectedStatus?.readers?.length ?? 0,
   });
   const zaparooConfigSummary = zaparooConfigDiagnostics ? formatZaparooConfigDiagnostics(zaparooConfigDiagnostics, developerMode) : '';
-  const connectionButtonLabel = hasActiveBridgeSession ? '연결 해제' : mister.connection.status === 'testing' ? '연결 중' : '연결';
-  const connectionButtonClass = hasActiveBridgeSession
-    ? 'bg-red-600 text-white hover:bg-red-700'
-    : mister.connection.status === 'testing'
-      ? 'bg-amber-500 text-white hover:bg-amber-600'
-      : 'bg-primary text-white hover:bg-blue-700';
 
   function changeLaunchMode(nextMode: MiSTerLaunchMode) {
     setLaunchMode(nextMode);
@@ -2705,120 +2604,6 @@ export function MisterFpgaPage() {
         </>
         )}
       </section>
-
-      {activeSection === 'connection' && (
-        <section className="rounded-lg border border-line bg-white p-5 shadow-surface">
-          <div className="mb-4 flex items-center gap-2">
-            <Link className="h-5 w-5" />
-            <h2 className="text-lg font-semibold">연결</h2>
-          </div>
-          <div className="grid gap-4 md:grid-cols-2">
-            <label className="block text-sm md:col-span-2">
-              <span className="font-medium">저장된 MiSTer 선택</span>
-              <select
-                value={zaparooLibrary.profiles.find((profile) => profile.host === mister.connection.config.host)?.deviceId ?? ''}
-                onChange={(event) => {
-                  const profile = zaparooLibrary.profiles.find((candidate) => candidate.deviceId === event.target.value);
-                  if (!profile) return;
-                  updateConnectionConfigForUi({
-                    host: profile.host ?? mister.connection.config.host,
-                    username: profile.username ?? mister.connection.config.username ?? 'root',
-                    port: profile.port ?? mister.connection.config.port ?? 22,
-                  });
-                  setZaparooLibrary(setActiveZaparooProfile(zaparooLibrary, profile.deviceId));
-                }}
-                className="mt-1 w-full rounded-md border border-line px-2 py-2"
-              >
-                <option value="">새 MiSTer 직접 입력</option>
-                {zaparooLibrary.profiles.map((profile) => (
-                  <option key={profile.deviceId} value={profile.deviceId}>
-                    {misterDisplayName(profile)} {profile.host ? `(${profile.host})` : ''}
-                  </option>
-                ))}
-              </select>
-              <span className="mt-1 block text-xs text-neutral-500">profile을 선택하면 저장된 host/IP가 자동으로 채워집니다. 새 주소도 직접 입력할 수 있습니다.</span>
-            </label>
-            <label className="block text-sm">
-              <span className="font-medium">MiSTer 주소/IP</span>
-              <input value={mister.connection.config.host} onChange={(event) => updateConnectionConfigForUi({ host: event.target.value })} className="mt-1 w-full rounded-md border border-line px-2 py-2" />
-            </label>
-            <label className="block text-sm">
-              <span className="font-medium">포트</span>
-              <input type="number" value={mister.connection.config.port} onChange={(event) => updateConnectionConfigForUi({ port: Number(event.target.value) })} className="mt-1 w-full rounded-md border border-line px-2 py-2" />
-            </label>
-            <label className="block text-sm">
-              <span className="font-medium">사용자 이름</span>
-              <input value={mister.connection.config.username} onChange={(event) => updateConnectionConfigForUi({ username: event.target.value })} className="mt-1 w-full rounded-md border border-line px-2 py-2" />
-            </label>
-            <label className="block text-sm">
-              <span className="font-medium">비밀번호</span>
-              <input
-                type="password"
-                value={mister.connection.config.password ?? '1'}
-                onChange={(event) => updateMiSTerConnectionConfig({ password: event.target.value, authMethod: 'password' })}
-                className="mt-1 w-full rounded-md border border-line px-2 py-2"
-              />
-              <span className="mt-1 block text-xs text-neutral-500">비밀번호 입력값은 연결에만 사용하며, 저장 시에는 안전 저장소를 사용할 수 있는 경우에만 암호화해 보관합니다.</span>
-            </label>
-          </div>
-          <details className="mt-4 rounded-md border border-line p-3 text-sm">
-            <summary className="cursor-pointer font-medium">고급 설정</summary>
-            <p className="mt-2 text-xs text-neutral-500">일반 사용자는 MiSTer IP와 비밀번호만 입력하면 됩니다. 로컬 브리지는 기본값을 사용합니다.</p>
-            <label className="mt-3 block">
-              <span className="font-medium">인증 방식</span>
-              <select value={mister.connection.config.authMethod} onChange={(event) => updateMiSTerConnectionConfig({ authMethod: event.target.value as never })} className="mt-1 w-full rounded-md border border-line px-2 py-2">
-                <option value="password">비밀번호</option>
-                <option value="private-key">Private key</option>
-                <option value="agent">Agent / Bridge</option>
-              </select>
-            </label>
-            <label className="mt-3 block">
-              <span className="font-medium">로컬 브리지 URL</span>
-              <input
-                value={mister.connection.bridgeUrl ?? getMiSTerBridgeUrl()}
-                onChange={(event) => setMiSTerConnection({ bridgeUrl: event.target.value })}
-                className="mt-1 w-full rounded-md border border-line px-2 py-2"
-              />
-            </label>
-            <label className="mt-3 flex items-center gap-2 rounded-md border border-line px-3 py-2 text-sm">
-              <input
-                type="checkbox"
-                checked={Boolean(mister.connection.bridgeEnabled ?? true)}
-                onChange={(event) => setMiSTerConnection({ bridgeEnabled: event.target.checked })}
-              />
-              <span className="font-medium">실제 SSH/SFTP에 로컬 브리지 사용</span>
-            </label>
-          </details>
-          <button
-            type="button"
-            disabled={mister.connection.status === 'testing'}
-            onClick={() => void (hasActiveBridgeSession ? handleDisconnect() : handleConnectionTest())}
-            className={`mt-4 inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium shadow-sm disabled:opacity-60 ${connectionButtonClass}`}
-          >
-            <RefreshCw className="h-4 w-4" />
-            {connectionButtonLabel}
-          </button>
-          <p className="mt-2 text-xs text-neutral-500">브리지 상태, SSH/SFTP 인증, 필수 MiSTer 경로, NFC config 감지를 확인합니다.</p>
-          <div className="mt-4 grid gap-2 text-sm md:grid-cols-2">
-            {connectionSteps.map((step) => (
-              <div key={step.label} className="flex items-center justify-between rounded-md border border-line px-3 py-2">
-                <span>{step.label}</span>
-                <span className={`text-xs font-medium ${step.state === 'done' ? 'text-green-700' : step.state === 'failed' ? 'text-red-700' : step.state === 'active' ? 'text-blue-700' : 'text-neutral-500'}`}>{step.state}</span>
-              </div>
-            ))}
-          </div>
-          <div className="mt-4 rounded-md border border-line bg-neutral-50 p-3 text-sm">
-            <p><span className="font-medium">상태:</span> {connectionStatusLabel(mister.connection.status, hasActiveBridgeSession)}</p>
-            <p><span className="font-medium">연결 대상:</span> {mister.connection.config.host || '-'}:{mister.connection.config.port || 22}</p>
-            <p><span className="font-medium">현재 연결된 MiSTer:</span> {hasActiveBridgeSession ? `${mister.connection.config.host}:${mister.connection.config.port}` : '-'}</p>
-            <p><span className="font-medium">마지막 연결:</span> {mister.connection.lastTestedAt ? new Date(mister.connection.lastTestedAt).toLocaleString() : '-'}</p>
-            <p><span className="font-medium">브리지 세션:</span> {mister.connection.connectionId ? '현재 앱 세션에서 활성' : '연결 안 됨'}</p>
-            <p><span className="font-medium">NFC CLI fallback:</span> {mister.connection.zaparooCommandStatus === 'found' ? mister.connection.zaparooCommand : mister.connection.zaparooCommandStatus === 'missing' ? '찾지 못함' : '확인 전'}</p>
-            <p><span className="font-medium">Active profile:</span> {zaparooLibrary.profiles.find((profile) => profile.deviceId === zaparooLibrary.activeProfileId)?.deviceName ?? '없음'}</p>
-            {mister.connection.message && <p className="mt-1 text-neutral-600">{mister.connection.message}</p>}
-          </div>
-        </section>
-      )}
 
       {activeSection === 'sync' && (
         <section className="rounded-lg border border-line bg-white p-5 shadow-surface">
