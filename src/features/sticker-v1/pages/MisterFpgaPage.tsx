@@ -38,7 +38,7 @@ import { platformIdentityKeys } from '@sticker-v1/utils/platformNormalization';
 import { isPlayableLibraryEntry, platformHasPlayableEntry } from '@sticker-v1/utils/zaparooDisplayFilters';
 
 type Section = 'sync' | 'browser' | 'tag';
-type SortMode = 'title' | 'platform' | 'last-synced' | 'card-created' | 'image-matched';
+type SortMode = 'title' | 'platform' | 'last-synced' | 'card-created' | 'image-matched' | 'genre' | 'year' | 'manufacturer';
 type ScanPhase = 'idle' | 'checking' | 'scanning' | 'merging' | 'done' | 'failed';
 type TagUiStatus = 'idle' | 'ready' | 'waiting for tag' | 'writing' | 'written' | 'reading' | 'verified' | 'error' | 'waitingForTag' | 'tagDetected' | 'mismatch' | 'timeout' | 'cancelled';
 type LibrarySearchScope = 'current' | 'all';
@@ -235,6 +235,14 @@ function sortEntries(entries: ZaparooLibraryEntry[], sortMode: SortMode) {
     if (sortMode === 'last-synced') return (b.lastSyncedAt ?? '').localeCompare(a.lastSyncedAt ?? '') || a.title.localeCompare(b.title);
     if (sortMode === 'card-created') return Number(b.hasCard) - Number(a.hasCard) || a.title.localeCompare(b.title);
     if (sortMode === 'image-matched') return Number(b.imageMatchState === 'matched') - Number(a.imageMatchState === 'matched') || a.title.localeCompare(b.title);
+    if (sortMode === 'genre') return (a.genre ?? '').localeCompare(b.genre ?? '') || a.title.localeCompare(b.title);
+    if (sortMode === 'manufacturer') return (a.manufacturer ?? '').localeCompare(b.manufacturer ?? '') || a.title.localeCompare(b.title);
+    if (sortMode === 'year') {
+      if (!a.releaseYear && !b.releaseYear) return a.title.localeCompare(b.title);
+      if (!a.releaseYear) return 1;
+      if (!b.releaseYear) return -1;
+      return (Number(a.releaseYear) - Number(b.releaseYear)) || a.title.localeCompare(b.title);
+    }
     return a.title.localeCompare(b.title);
   });
 }
@@ -465,6 +473,7 @@ export function MisterFpgaPage() {
   const [libraryDeviceFilter, setLibraryDeviceFilter] = useState<string>('__all__');
   const [platformFilterQuery, setPlatformFilterQuery] = useState('');
   const [sortMode, setSortMode] = useState<SortMode>('title');
+  const [metadataFilter, setMetadataFilter] = useState<{ genre: string; manufacturer: string; year: string }>({ genre: '', manufacturer: '', year: '' });
   const [pageSize, setPageSize] = useState(100);
   const [page, setPage] = useState(1);
   // Library platform sidebar: search box + collapsible groups (Console/Arcade/Computer/…) to tame the long list.
@@ -593,6 +602,10 @@ export function MisterFpgaPage() {
   }, [query, librarySearchScope, sortMode, selectedPlatform, pageSize]);
 
   useEffect(() => {
+    setMetadataFilter({ genre: '', manufacturer: '', year: '' });
+  }, [selectedPlatform]);
+
+  useEffect(() => {
     setActiveSection(sectionFromPath(location.pathname));
   }, [location.pathname]);
 
@@ -658,21 +671,56 @@ export function MisterFpgaPage() {
     return entriesAfterHiddenFilter.filter((entry) => playablePlatforms.has(`${entry.platformGroup}/${entry.systemId}`) && isPlayableLibraryEntry(entry));
   }, [hiddenPlatformKeys, libraryDeviceFilter, showHiddenPlatforms, zaparooLibrary.entries]);
 
-  const filteredEntries = useMemo(() => {
+  // Entries after the platform + search-query filters, before the genre/manufacturer/year metadata filter below.
+  // Kept separate so the metadata filter dropdowns can keep listing every option available in this scope even
+  // while another metadata filter is already active (see metadataFilterOptions).
+  const platformAndQueryFilteredEntries = useMemo(() => {
     const normalizedQuery = normalizeName(query);
     const searchAllLibrary = Boolean(normalizedQuery && librarySearchScope === 'all');
+    return visibleLibraryEntries.filter((entry) => {
+      if (!searchAllLibrary) {
+        if (selectedPlatform === '__with_cards__' && !entry.hasCard) return false;
+        if (selectedPlatform && selectedPlatform !== '__with_cards__' && selectedPlatform !== '__all_library__' && `${entry.platformGroup}/${entry.systemId}` !== selectedPlatform) return false;
+      }
+      if (!normalizedQuery) return true;
+      return normalizeName(`${entry.title} ${entry.romName} ${entry.relativePath} ${entry.koTitle ?? ''} ${entry.systemId} ${entry.genre ?? ''} ${entry.manufacturer ?? ''} ${entry.releaseYear ?? ''}`).includes(normalizedQuery);
+    });
+  }, [librarySearchScope, query, selectedPlatform, visibleLibraryEntries]);
+
+  // Genre/manufacturer/year options for the metadata filter dropdowns, computed from the platform+query scope
+  // above (not the metadata-filtered result) so picking one filter never makes the other dropdowns' choices vanish.
+  const metadataFilterOptions = useMemo(() => {
+    const genres = new Set<string>();
+    const manufacturers = new Set<string>();
+    const years = new Set<string>();
+    platformAndQueryFilteredEntries.forEach((entry) => {
+      if (entry.genre) genres.add(entry.genre);
+      if (entry.manufacturer) manufacturers.add(entry.manufacturer);
+      if (entry.releaseYear) years.add(entry.releaseYear);
+    });
+    return {
+      genres: Array.from(genres).sort((a, b) => a.localeCompare(b)),
+      manufacturers: Array.from(manufacturers).sort((a, b) => a.localeCompare(b)),
+      years: Array.from(years).sort((a, b) => Number(a) - Number(b)),
+    };
+  }, [platformAndQueryFilteredEntries]);
+
+  const filteredEntries = useMemo(() => {
     return sortEntries(
-      visibleLibraryEntries.filter((entry) => {
-        if (!searchAllLibrary) {
-          if (selectedPlatform === '__with_cards__' && !entry.hasCard) return false;
-          if (selectedPlatform && selectedPlatform !== '__with_cards__' && selectedPlatform !== '__all_library__' && `${entry.platformGroup}/${entry.systemId}` !== selectedPlatform) return false;
-        }
-        if (!normalizedQuery) return true;
-        return normalizeName(`${entry.title} ${entry.romName} ${entry.relativePath} ${entry.koTitle ?? ''} ${entry.systemId}`).includes(normalizedQuery);
+      platformAndQueryFilteredEntries.filter((entry) => {
+        if (metadataFilter.genre && entry.genre !== metadataFilter.genre) return false;
+        if (metadataFilter.manufacturer && entry.manufacturer !== metadataFilter.manufacturer) return false;
+        if (metadataFilter.year && entry.releaseYear !== metadataFilter.year) return false;
+        return true;
       }),
       sortMode,
     );
-  }, [librarySearchScope, query, selectedPlatform, sortMode, visibleLibraryEntries]);
+  }, [metadataFilter, platformAndQueryFilteredEntries, sortMode]);
+
+  // Metadata filter dropdowns only make sense once some entry in scope actually carries genre/manufacturer/year
+  // (console platforms have no arcade metadata yet), so console-only platforms keep looking unchanged.
+  const showMetadataFilters = metadataFilterOptions.genres.length > 0 || metadataFilterOptions.manufacturers.length > 0 || metadataFilterOptions.years.length > 0;
+  const metadataFilterActive = Boolean(metadataFilter.genre || metadataFilter.manufacturer || metadataFilter.year);
 
   // Group versions of the same game (same platform + normalized title, which drops region/version markers).
   // Order follows filteredEntries (already sorted); representative = stored choice, else region-preferred.
@@ -3506,7 +3554,41 @@ export function MisterFpgaPage() {
                         <option value="last-synced">정렬: 마지막 동기화</option>
                         <option value="card-created">정렬: 카드 생성</option>
                         <option value="image-matched">정렬: 이미지 매칭</option>
+                        <option value="genre">정렬: 장르</option>
+                        <option value="year">정렬: 연도</option>
+                        <option value="manufacturer">정렬: 제조사</option>
                       </select>
+                      {showMetadataFilters && (
+                        <>
+                          <select value={metadataFilter.genre} onChange={(event) => setMetadataFilter((current) => ({ ...current, genre: event.target.value }))} className="rounded-md border border-line px-2 py-2 text-sm">
+                            <option value="">장르: 전체</option>
+                            {metadataFilterOptions.genres.map((genre) => (
+                              <option key={genre} value={genre}>{genre}</option>
+                            ))}
+                          </select>
+                          <select value={metadataFilter.manufacturer} onChange={(event) => setMetadataFilter((current) => ({ ...current, manufacturer: event.target.value }))} className="rounded-md border border-line px-2 py-2 text-sm">
+                            <option value="">제조사: 전체</option>
+                            {metadataFilterOptions.manufacturers.map((manufacturer) => (
+                              <option key={manufacturer} value={manufacturer}>{manufacturer}</option>
+                            ))}
+                          </select>
+                          <select value={metadataFilter.year} onChange={(event) => setMetadataFilter((current) => ({ ...current, year: event.target.value }))} className="rounded-md border border-line px-2 py-2 text-sm">
+                            <option value="">연도: 전체</option>
+                            {metadataFilterOptions.years.map((year) => (
+                              <option key={year} value={year}>{year}</option>
+                            ))}
+                          </select>
+                        </>
+                      )}
+                      {metadataFilterActive && (
+                        <button
+                          type="button"
+                          onClick={() => setMetadataFilter({ genre: '', manufacturer: '', year: '' })}
+                          className="rounded-md border border-line px-2 py-1 text-xs font-semibold hover:bg-neutral-50"
+                        >
+                          필터 지우기
+                        </button>
+                      )}
                       <select value={pageSize} onChange={(event) => setPageSize(Number(event.target.value))} className="rounded-md border border-line px-2 py-2 text-sm">
                         <option value={20}>20개씩 보기</option>
                         <option value={50}>50개씩 보기</option>
@@ -3538,6 +3620,7 @@ export function MisterFpgaPage() {
                           const isExpanded = expandedGameKeys.has(group.key);
                           const versionCount = group.versions.length;
                           const selected = selectedIds.includes(entry.id);
+                          const entryMetaLine = [entry.manufacturer, entry.releaseYear, entry.genre, entry.arcade?.players, entry.arcade?.numButtons ? `${entry.arcade.numButtons}버튼` : undefined].filter(Boolean).join(' · ');
                           return (
                           <Fragment key={group.key}>
                           <tr
@@ -3566,6 +3649,7 @@ export function MisterFpgaPage() {
                                 <div className="min-w-0">
                                   {entry.title}
                                   <p className="text-xs font-normal text-neutral-500">{entry.relativePath}</p>
+                                  {entryMetaLine && <p className="text-[11px] font-normal text-neutral-500">{entryMetaLine}</p>}
                                 </div>
                                 {versionCount > 1 && (
                                   <button

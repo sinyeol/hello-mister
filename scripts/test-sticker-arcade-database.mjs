@@ -2,7 +2,7 @@
 // display names learned from the database, per-game metadata, and the library merge rule that lets a raw core
 // name (jtcps3) follow its proper platform name (CPS-3) without touching custom platform names.
 import assert from 'node:assert/strict';
-import { importTs } from './sticker-v1-test-utils.mjs';
+import { importTs, readRepoFile } from './sticker-v1-test-utils.mjs';
 import { ARCADE_DATABASE_REMOTE_PATH, normalizeArcadeDatabase, parseArcadeCoreListing } from '../electron/arcade-database.mjs';
 
 const NL = String.fromCharCode(10);
@@ -144,5 +144,14 @@ assert.equal(byPath(redEarth.absolutePath).arcade.setname, 'redearthn', 'arcade 
 assert.equal(byPath(knights.absolutePath).systemId, 'My PGM', 'a custom platform name is not overwritten by a rescan');
 assert.equal(byPath(zooKeeper.absolutePath).systemId, 'Taito Zoo Keeper', 'the generic Arcade bucket follows the new platform name');
 assert.equal(second.entries.length, 3, 'renames update entries in place instead of duplicating them');
+
+// --- MiSTer game list UI: arcade metadata should be sortable, filterable, and visible per row ---
+const misterFpgaPage = readRepoFile('src/features/sticker-v1/pages/MisterFpgaPage.tsx');
+assert.ok(misterFpgaPage.includes('정렬: 장르'), 'game list sort should offer a genre option');
+assert.ok(misterFpgaPage.includes('정렬: 연도'), 'game list sort should offer a year option');
+assert.ok(misterFpgaPage.includes('정렬: 제조사'), 'game list sort should offer a manufacturer option');
+assert.ok(misterFpgaPage.includes('metadataFilter'), 'game list should track a genre/manufacturer/year metadata filter');
+assert.ok(misterFpgaPage.includes('필터 지우기'), 'game list should expose a clear-filter action while a metadata filter is active');
+assert.ok(misterFpgaPage.includes('${entry.arcade.numButtons}버튼'), 'row metadata line should show the arcade button count');
 
 console.log('Sticker arcade database tests passed.');
