@@ -940,6 +940,29 @@ export function MisterFpgaPage() {
     return Array.from(found.entries()).sort((a, b) => a[0].localeCompare(b[0]));
   }, [existingPlatformIdentityKeys, ignoredPlatformIdentityKeys, knownCatalogIdentityKeys, lastScanEntries]);
 
+  // "새 플랫폼 발견 시" setting: apply it automatically as soon as a scan reports platforms that are not in the
+  // library yet. 'addEnabled' merges them right away (what the "전체 가져오기" button does), 'addDisabled'
+  // registers them as excluded, 'ignore' hides them; 'ask' (default) leaves the manual discovery list alone.
+  const autoHandledDiscoveryRef = useRef('');
+  // Latest-handler ref: the merge/apply functions are plain closures over the current library state, so keep them
+  // out of the effect dependencies (they would otherwise re-run the effect on every render).
+  const discoveryHandlersRef = useRef({ merge: mergeDiscoveredPlatformsToLibrary, apply: applyDiscoveredPlatformStates });
+  discoveryHandlersRef.current = { merge: mergeDiscoveredPlatformsToLibrary, apply: applyDiscoveredPlatformStates };
+  useEffect(() => {
+    const behavior = scanFilterConfig?.config.misterScan.newPlatformBehavior ?? 'ask';
+    if (behavior === 'ask' || lastScanEntries.length === 0 || unknownScannedPlatforms.length === 0) return;
+    const keys = unknownScannedPlatforms.map(([key]) => key);
+    const signature = `${behavior}:${keys.join('|')}`;
+    if (autoHandledDiscoveryRef.current === signature) return;
+    autoHandledDiscoveryRef.current = signature;
+    if (behavior === 'addEnabled') {
+      discoveryHandlersRef.current.merge(keys);
+      setMessage(`새 플랫폼 ${keys.length}개를 자동으로 가져왔습니다: ${keys.map((key) => key.split('/').pop()).join(', ')}`);
+      return;
+    }
+    discoveryHandlersRef.current.apply(unknownScannedPlatforms, behavior === 'ignore' ? 'ignored' : 'disabled');
+  }, [lastScanEntries, scanFilterConfig, unknownScannedPlatforms]);
+
   const discoveredPlatformRows = useMemo(() => {
     const rows = new Map<string, {
       key: string;
@@ -1500,11 +1523,11 @@ export function MisterFpgaPage() {
     return { ...item, ...overrides, defaultImportEnabled: enabled, updatedAt: now };
   }
 
-  function setDiscoveredPlatformImportState(platformKey: string, entry: PlatformDiscoveryEntry | undefined, state: 'enabled' | 'disabled' | 'ignored' | 'pending') {
-    const disabled = new Set(zaparooLibrary.importDisabledPlatformKeys ?? []);
-    const enabledOverrides = new Set(zaparooLibrary.importEnabledPlatformKeys ?? []);
-    const ignored = new Set(zaparooLibrary.ignoredUnknownPlatformKeys ?? []);
-    const currentCatalog = (zaparooLibrary.customPlatformCatalog ?? []).filter((candidate) => candidate.platformKey !== platformKey);
+  function libraryWithDiscoveredPlatformState(library: typeof zaparooLibrary, platformKey: string, entry: PlatformDiscoveryEntry | undefined, state: 'enabled' | 'disabled' | 'ignored' | 'pending') {
+    const disabled = new Set(library.importDisabledPlatformKeys ?? []);
+    const enabledOverrides = new Set(library.importEnabledPlatformKeys ?? []);
+    const ignored = new Set(library.ignoredUnknownPlatformKeys ?? []);
+    const currentCatalog = (library.customPlatformCatalog ?? []).filter((candidate) => candidate.platformKey !== platformKey);
     let nextCatalog = currentCatalog;
 
     if (state === 'enabled' || state === 'disabled') {
@@ -1533,15 +1556,26 @@ export function MisterFpgaPage() {
       if (entry) nextCatalog = [...currentCatalog, catalogItemForDiscoveredPlatform(platformKey, entry, false)].sort((a, b) => a.platformKey.localeCompare(b.platformKey));
     }
 
-    setZaparooLibrary({
-      ...zaparooLibrary,
+    return {
+      ...library,
       customPlatformCatalog: nextCatalog,
       ignoredUnknownPlatformKeys: Array.from(ignored).sort(),
       importDisabledPlatformKeys: Array.from(disabled).sort(),
       importEnabledPlatformKeys: Array.from(enabledOverrides).sort(),
       updatedAt: new Date().toISOString(),
-    });
+    };
+  }
+
+  function setDiscoveredPlatformImportState(platformKey: string, entry: PlatformDiscoveryEntry | undefined, state: 'enabled' | 'disabled' | 'ignored' | 'pending') {
+    setZaparooLibrary(libraryWithDiscoveredPlatformState(zaparooLibrary, platformKey, entry, state));
     setMessage(`${platformKey} platform 상태를 ${state}로 저장했습니다.`);
+  }
+
+  // Batch form used by the automatic "새 플랫폼 발견 시" handling: one library update for every platform of a scan.
+  function applyDiscoveredPlatformStates(platforms: Array<[string, PlatformDiscoveryEntry]>, state: 'disabled' | 'ignored') {
+    const next = platforms.reduce((library, [platformKey, entry]) => libraryWithDiscoveredPlatformState(library, platformKey, entry, state), zaparooLibrary);
+    setZaparooLibrary(next);
+    setMessage(`새 플랫폼 ${platforms.length}개를 설정에 따라 ${state === 'ignored' ? '숨김' : '제외'} 상태로 저장했습니다: ${platforms.map(([platformKey]) => platformKey.split('/').pop()).join(', ')}`);
   }
 
   function openCustomPlatformRegistration(row: { key: string; name: string; path: string; entry?: PlatformDiscoveryEntry }) {
@@ -2726,7 +2760,7 @@ export function MisterFpgaPage() {
                       >
                         <option value="ask">확인 후 선택 - 새 플랫폼 발견 목록에 표시</option>
                         <option value="addDisabled">제외로 추가 - 목록에 남기고 가져오지 않음</option>
-                        <option value="addEnabled">가져오기로 추가 - 다음 스캔부터 포함</option>
+                        <option value="addEnabled">가져오기로 추가 - 스캔 직후 자동으로 병합</option>
                         <option value="ignore">숨김 - 일반 목록에 표시하지 않음</option>
                       </select>
                     </label>

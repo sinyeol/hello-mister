@@ -3,7 +3,7 @@
 // from the _Arcade folder name, so the platform collided with the generic "Arcade" platform, never appeared as a
 // new platform and could not be imported at all.
 import assert from 'node:assert/strict';
-import { importTs } from './sticker-v1-test-utils.mjs';
+import { importTs, readRepoFile } from './sticker-v1-test-utils.mjs';
 
 const { parseMiSTerPathList } = await importTs('src/features/sticker-v1/services/mister/misterScan.ts');
 const { arcadeCorePlatformName, isGenericArcadeSystemId } = await importTs('src/features/sticker-v1/services/mister/misterCoreRegistry.ts');
@@ -54,5 +54,13 @@ const nesKeys = identity(nes);
 assert.ok(nesKeys.includes('nes'), 'NES keeps its core folder identity');
 assert.ok(!nesKeys.includes('games'), 'the games root folder is not an identity');
 assert.ok(!identity({ ...nes, folderName: 'games' }).includes('games'), 'a games menu-root folder name is ignored');
+
+// --- the "새 플랫폼 발견 시" scan-filter setting must actually drive what happens after a scan ---
+const misterPage = readRepoFile('src/features/sticker-v1/pages/MisterFpgaPage.tsx');
+assert.match(misterPage, /autoHandledDiscoveryRef/, 'the MiSTer page applies the new-platform behavior automatically after a scan');
+assert.match(misterPage, /behavior === 'addEnabled'[\s\S]{0,200}\.merge\(keys\)/, '"가져오기로 추가" merges newly discovered platforms without a manual click');
+assert.match(misterPage, /merge: mergeDiscoveredPlatformsToLibrary, apply: applyDiscoveredPlatformStates/, 'automatic handling reuses the same merge/apply handlers as the manual buttons');
+assert.match(misterPage, /\.apply\(unknownScannedPlatforms, behavior === 'ignore' \? 'ignored' : 'disabled'\)/, '"숨김" and "제외로 추가" are applied to every newly discovered platform in one library update');
+assert.match(misterPage, /value="addEnabled">가져오기로 추가 - 스캔 직후 자동으로 병합</, 'the option label explains that platforms are merged right after the scan');
 
 console.log('Sticker platform identity tests passed.');
