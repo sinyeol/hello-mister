@@ -114,6 +114,7 @@ const knownArcadeCorePlatform: Record<string, string> = {
   jtcps1: 'CPS-1',
   jtcps15: 'CPS-1.5',
   jtcps2: 'CPS-2',
+  jtcps3: 'CPS-3',
   jts16: 'Sega System 16',
   jts16b: 'Sega System 16B',
   jtoutrun: 'Sega OutRun',

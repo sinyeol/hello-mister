@@ -20,6 +20,9 @@ const platformAliases = new Map<string, string>([
   ['cps 2', 'cps2'],
   ['cps2', 'cps2'],
   ['cps-2', 'cps2'],
+  ['cps 3', 'cps3'],
+  ['cps3', 'cps3'],
+  ['cps-3', 'cps3'],
   ['mega drive', 'genesis'],
   ['megadrive', 'genesis'],
   ['genesis', 'genesis'],
@@ -58,12 +61,22 @@ export function normalizePlatformAliasKey(value: string | undefined) {
     ?? compact;
 }
 
+// MiSTer menu roots that hold many platforms at once. A folder name like "_Arcade" says which MENU a file sits in,
+// not which platform it is, so it must not become an identity key: otherwise every rbf-split arcade core found
+// directly under _Arcade (e.g. jtcps3 -> CPS-3) would collide with the generic "Arcade" platform and never show up
+// as a new platform.
+const menuRootFolderKeys = new Set(['arcade', 'console', 'computer', 'other', 'utility', 'games']);
+
+function isMenuRootFolder(value: string | undefined) {
+  return Boolean(value) && menuRootFolderKeys.has(normalizePlatformAliasKey(value));
+}
+
 export function platformIdentityKeys(input: PlatformIdentityInput) {
   const platformKeyTail = input.platformKey?.split('/').pop();
   const values = [
     input.systemId,
-    input.folderName,
-    input.coreFolderName,
+    isMenuRootFolder(input.folderName) ? undefined : input.folderName,
+    isMenuRootFolder(input.coreFolderName) ? undefined : input.coreFolderName,
     input.displayName,
     platformKeyTail,
     input.platformKey,
