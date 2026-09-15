@@ -8,6 +8,8 @@ import dns from 'node:dns';
 import os from 'node:os';
 import path from 'node:path';
 import ssh2 from 'ssh2';
+import JSZip from 'jszip';
+import { ARCADE_DATABASE_REMOTE_PATH, normalizeArcadeDatabase, parseArcadeCoreListing } from './arcade-database.mjs';
 import { execFile } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { promisify, TextDecoder } from 'node:util';
@@ -108,6 +110,7 @@ const remotePaths = {
   config: '/media/fat/config',
   linux: '/media/fat/linux',
   zaparooConfig: '/media/fat/zaparoo/config.toml',
+  arcadeDatabaseZip: ARCADE_DATABASE_REMOTE_PATH,
 };
 
 const romFsQuickPaths = ['/', remotePaths.mediaFat, remotePaths.games, remotePaths.arcade];
@@ -2653,19 +2656,90 @@ async function listRemoteGameFilesFast({ sessionId } = {}) {
 
 async function listRemoteArcadeCores({ sessionId } = {}) {
   return withSessionClient(sessionId, async (client, session) => {
-    // Read each arcade .mra's <rbf> (core/hardware name) in one pass. MiSTer ships busybox grep (no --include),
-    // so use find -exec grep. Read-only. Lets the app split the flat _Arcade bucket into per-hardware platforms.
-    const command = "find /media/fat/_Arcade -name '*.mra' -exec grep -Hm1 '<rbf' {} +";
+    // Read each arcade .mra's <rbf> (core/hardware name) and <setname> (arcade database key) in one pass. MiSTer
+    // ships busybox grep (no --include), so use find -exec grep -o. Read-only. Lets the app split the flat _Arcade
+    // bucket into per-hardware platforms and look every game up in the arcade database.
+    const command = "find /media/fat/_Arcade -name '*.mra' -exec grep -HoE '<rbf[^>]*>[^<]*|<setname[^>]*>[^<]*' {} +";
     const result = await execReadOnly(client, 'list-arcade-cores', command, session, { maskOutput: false });
-    const cores = {};
-    if (result.stdout) {
-      for (const line of result.stdout.split(/\r?\n/)) {
-        const match = line.match(/^(.+?\.mra):\s*<rbf>\s*([^<\s]+)/i);
-        if (match) cores[match[1]] = match[2];
-      }
-    }
-    return { ok: result.exitCode === 0 || Object.keys(cores).length > 0, sessionId, cores, readAt: new Date().toISOString(), durationMs: result.durationMs };
+    const { cores, setnames } = parseArcadeCoreListing(result.stdout || '');
+    return { ok: result.exitCode === 0 || Object.keys(cores).length > 0, sessionId, cores, setnames, readAt: new Date().toISOString(), durationMs: result.durationMs };
   });
+}
+
+const arcadeDatabaseCacheFileName = 'arcade-database-cache.json';
+
+function arcadeDatabaseSummary(cache, source, sessionId, message) {
+  return {
+    ok: true,
+    sessionId,
+    source,
+    entries: cache.entries,
+    entryCount: cache.entryCount,
+    fetchedAt: cache.fetchedAt,
+    sourcePath: cache.sourcePath,
+    readAt: new Date().toISOString(),
+    message,
+  };
+}
+
+// The update_all Arcade Organizer keeps the MiSTer Arcade Database (mad_db.json, keyed by <setname>) as data.zip
+// under Scripts/.config/arcade-organizer. Read it read-only over SFTP, unzip it here and cache the normalized
+// entries in userData, so scans stay fast while the file is unchanged and keep working while the MiSTer is away.
+async function readRemoteArcadeDatabase({ sessionId } = {}) {
+  const cachePath = appDataPath(arcadeDatabaseCacheFileName);
+  const cache = await readJsonFile(cachePath, null);
+  const usableCache = cache && cache.version === 1 && cache.entries && typeof cache.entries === 'object' ? cache : null;
+  try {
+    return await withSessionClient(sessionId, async (client) => {
+      const sftp = await sftpClient(client);
+      let attrs = null;
+      try {
+        attrs = await sftpStat(sftp, remotePaths.arcadeDatabaseZip);
+      } catch {
+        attrs = null;
+      }
+      if (!attrs?.isFile?.()) {
+        if (usableCache) return arcadeDatabaseSummary(usableCache, 'cache', sessionId, 'MiSTer에 아케이드 DB(data.zip)가 없어 이전에 저장한 사본을 사용합니다.');
+        return {
+          ok: false,
+          sessionId,
+          source: 'none',
+          entries: {},
+          entryCount: 0,
+          readAt: new Date().toISOString(),
+          message: 'MiSTer에서 아케이드 DB(Scripts/.config/arcade-organizer/data.zip)를 찾지 못했습니다. update_all의 Arcade Organizer를 한 번 실행하면 생성됩니다.',
+          errorCode: 'REMOTE_PATH_MISSING',
+        };
+      }
+      const sourceMtime = Number(attrs.mtime) || 0;
+      const sourceSize = Number(attrs.size) || 0;
+      if (usableCache && usableCache.sourceMtime === sourceMtime && usableCache.sourceSize === sourceSize) {
+        return arcadeDatabaseSummary(usableCache, 'cache', sessionId, '아케이드 DB가 바뀌지 않아 저장한 사본을 사용합니다.');
+      }
+      const buffer = await sftpReadBuffer(sftp, remotePaths.arcadeDatabaseZip, 8 * 1024 * 1024);
+      const zip = await JSZip.loadAsync(buffer);
+      const file = zip.file('mad_db.json') ?? zip.file(/\.json$/i)[0];
+      if (!file) throw new Error('data.zip 안에 mad_db.json이 없습니다.');
+      const normalized = normalizeArcadeDatabase(JSON.parse(await file.async('string')));
+      const now = new Date().toISOString();
+      const next = {
+        version: 1,
+        fetchedAt: now,
+        sourcePath: remotePaths.arcadeDatabaseZip,
+        sourceMtime,
+        sourceSize,
+        entryCount: normalized.entryCount,
+        entries: normalized.entries,
+      };
+      await writeJsonFile(cachePath, next);
+      return arcadeDatabaseSummary(next, 'mister', sessionId, `MiSTer의 아케이드 DB를 읽었습니다 (${normalized.entryCount}개 항목). 원격에는 아무것도 쓰지 않았습니다.`);
+    });
+  } catch (error) {
+    if (usableCache) {
+      return arcadeDatabaseSummary(usableCache, 'cache', sessionId, `MiSTer의 아케이드 DB를 읽지 못해 저장한 사본을 사용합니다: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    throw error;
+  }
 }
 
 async function listRemoteGameFolderFiles({ sessionId, folderPath, options }) {
@@ -4995,7 +5069,15 @@ function registerIpc() {
       return await listRemoteArcadeCores(request);
     } catch (error) {
       const classified = classifySshError(error);
-      return { ok: false, sessionId: request?.sessionId, cores: {}, readAt: new Date().toISOString(), message: classified.message, errorCode: classified.code };
+      return { ok: false, sessionId: request?.sessionId, cores: {}, setnames: {}, readAt: new Date().toISOString(), message: classified.message, errorCode: classified.code };
+    }
+  });
+  ipcMain.handle('mister:remote:read-arcade-database', async (_event, request) => {
+    try {
+      return await readRemoteArcadeDatabase(request);
+    } catch (error) {
+      const classified = classifySshError(error);
+      return { ok: false, sessionId: request?.sessionId, source: 'none', entries: {}, entryCount: 0, readAt: new Date().toISOString(), message: classified.message, errorCode: classified.code };
     }
   });
   ipcMain.handle('mister:remote:list-scripts', async (_event, sessionId) => {

@@ -134,9 +134,11 @@ export function isGenericArcadeSystemId(systemId: string) {
   return genericArcadeSystemIds.has(systemId.trim().toLowerCase());
 }
 
-export function arcadeCorePlatformName(rbf: string): string {
+// Display name for an arcade core (<rbf>): the curated table first (keeps existing platform keys stable), then the
+// arcade-database platform name learned from the MiSTer (e.g. "Konami Simpsons"), then the raw rbf name.
+export function arcadeCorePlatformName(rbf: string, databaseName?: string): string {
   const key = rbf.trim().toLowerCase();
-  return knownArcadeCorePlatform[key] ?? rbf.trim();
+  return knownArcadeCorePlatform[key] ?? (databaseName?.trim() || rbf.trim());
 }
 
 export function fileNameFromPath(path: string) {

@@ -128,6 +128,7 @@ contextBridge.exposeInMainWorld('helloMisterDesktop', {
   listRemoteGameFolderFiles: (sessionId, folderPath, options) => ipcRenderer.invoke('mister:remote:list-game-folder-files', { sessionId, folderPath, options }),
   listRemoteGameFilesFast: (sessionId) => ipcRenderer.invoke('mister:remote:list-game-files-fast', { sessionId }),
   listRemoteArcadeCores: (sessionId) => ipcRenderer.invoke('mister:remote:list-arcade-cores', { sessionId }),
+  readRemoteArcadeDatabase: (sessionId) => ipcRenderer.invoke('mister:remote:read-arcade-database', { sessionId }),
   listRemoteScripts: (sessionId) => ipcRenderer.invoke('mister:remote:list-scripts', sessionId),
   readRemoteScript: (sessionId, path) => ipcRenderer.invoke('mister:remote:read-script', { sessionId, path }),
   saveDiagnosticPackage: (diagnostic) => ipcRenderer.invoke('diagnostics:save-package', diagnostic),

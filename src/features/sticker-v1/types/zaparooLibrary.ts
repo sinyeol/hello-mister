@@ -7,6 +7,7 @@
 } from './mister';
 import type { EntityId, ISODateString } from './shared';
 import type { MiSTerPlatformCatalogItem } from '@sticker-v1/data/misterPlatformCatalog';
+import type { ArcadeGameMetadata } from './mister';
 
 export type MiSTerLibraryScanSource = 'bridge-scan' | 'path-list' | 'file-import';
 
@@ -78,6 +79,7 @@ export interface ZaparooLibraryEntry {
   manufacturer?: string;
   developer?: string;
   metadataSource?: 'scan' | 'external' | 'manual';
+  arcade?: ArcadeGameMetadata;
   koTitle?: string;
   koTitleSource?: string;
   koTitleConfidence?: number;

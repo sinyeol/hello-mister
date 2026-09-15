@@ -110,6 +110,23 @@ export interface MiSTerImageMatchResult {
   aliasApplied?: boolean;
 }
 
+// Arcade identity and facts for an .mra, learned from its <rbf>/<setname> tags and the MiSTer Arcade Database.
+export interface ArcadeGameMetadata {
+  rbf?: string;
+  setname?: string;
+  platform?: string;
+  category?: string;
+  region?: string;
+  players?: string;
+  numButtons?: number;
+  rotation?: number;
+  resolution?: string;
+  alternative?: boolean;
+  bootleg?: boolean;
+  homebrew?: boolean;
+  series?: string[];
+}
+
 export interface MiSTerScanEntry {
   id: EntityId;
   source: 'mister';
@@ -144,6 +161,13 @@ export interface MiSTerScanEntry {
   classificationReason?: string;
   pathValid?: boolean;
   aliasApplied?: boolean;
+  // Metadata learned at scan time from the arcade database (or another external source).
+  genre?: string;
+  releaseYear?: string;
+  manufacturer?: string;
+  orientation?: 'horizontal' | 'vertical' | 'unknown';
+  metadataSource?: 'scan' | 'external' | 'manual';
+  arcade?: ArcadeGameMetadata;
   scannedAt: ISODateString;
 }
 

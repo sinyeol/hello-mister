@@ -1,6 +1,7 @@
 ﻿import { requiredMiSTerPaths } from '@sticker-v1/services/mister/misterPersistence';
 import { parseMiSTerPathList } from '@sticker-v1/services/mister/misterScan';
 import { arcadeCorePlatformName, isGenericArcadeSystemId } from '@sticker-v1/services/mister/misterCoreRegistry';
+import { arcadeCoreDisplayNames, arcadeMetadataForEntry, type ArcadeDatabaseEntries } from '@sticker-v1/services/mister/arcadeDatabase';
 import defaultScanFilterConfig from '@sticker-v1/config/defaultMisterScanFilters.json';
 import { normalizeName } from '@sticker-v1/utils/normalizeName';
 import { ZaparooApiClient } from '../../../../services/zaparoo/zaparooApiClient';
@@ -658,15 +659,29 @@ export class HttpMiSTerBridgeClient implements MiSTerBridgeClient {
       // Split the flat _Arcade bucket into per-hardware platforms from each .mra's <rbf> core name, so a newly
       // installed arcade core (e.g. IGS PGM) shows as its own platform. Real _Arcade/<Hardware>/ folders already
       // get a per-hardware systemId from the path and are left untouched (isGenericArcadeSystemId guard).
-      if (api.listRemoteArcadeCores && entries.some((entry) => entry.platformGroup === 'Arcade' && isGenericArcadeSystemId(entry.systemId))) {
+      // The arcade database (mad_db.json from the update_all Arcade Organizer, keyed by <setname>) names cores the
+      // built-in table does not know and attaches genre / year / manufacturer / players metadata to every MRA.
+      if (api.listRemoteArcadeCores && entries.some((entry) => entry.platformGroup === 'Arcade')) {
         try {
           const arcade = await api.listRemoteArcadeCores(session.sessionId ?? '');
           if (arcade?.ok && arcade.cores) {
             const cores = arcade.cores;
+            const setnames = arcade.setnames ?? {};
+            const database = api.readRemoteArcadeDatabase
+              ? await api.readRemoteArcadeDatabase(session.sessionId ?? '').catch(() => undefined)
+              : undefined;
+            const databaseEntries: ArcadeDatabaseEntries = database?.ok ? database.entries : {};
+            const coreNames = arcadeCoreDisplayNames(entries.map((entry) => entry.absolutePath), cores, setnames, databaseEntries);
             entries = entries.map((entry) => {
-              if (entry.platformGroup !== 'Arcade' || !isGenericArcadeSystemId(entry.systemId)) return entry;
+              if (entry.platformGroup !== 'Arcade') return entry;
               const rbf = cores[entry.absolutePath];
-              return rbf ? { ...entry, systemId: arcadeCorePlatformName(rbf) } : entry;
+              const setname = setnames[entry.absolutePath];
+              if (!rbf && !setname) return entry;
+              const metadata = arcadeMetadataForEntry(rbf, setname, setname ? databaseEntries[setname] : undefined);
+              const systemId = rbf && isGenericArcadeSystemId(entry.systemId)
+                ? arcadeCorePlatformName(rbf, coreNames.get(rbf.trim().toLowerCase()))
+                : entry.systemId;
+              return { ...entry, ...metadata, systemId };
             });
           }
         } catch {

@@ -338,11 +338,16 @@ export interface HelloMisterDesktopApi {
     ok: boolean;
     sessionId?: string;
     cores: Record<string, string>;
+    // <setname> per .mra path: the key into the arcade database.
+    setnames?: Record<string, string>;
     readAt?: string;
     durationMs?: number;
     message?: string;
     errorCode?: string;
   }>;
+  // MiSTer Arcade Database (mad_db.json, keyed by <setname>) kept by the update_all Arcade Organizer; read-only,
+  // cached in userData by the main process.
+  readRemoteArcadeDatabase?: (sessionId: string) => Promise<ArcadeDatabaseReadResult>;
   listRemoteScripts?: (sessionId: string) => Promise<RemoteReadResult<MisterRemoteScriptFile[]>>;
   readRemoteScript?: (sessionId: string, path: string) => Promise<RemoteReadResult<MisterRemoteScriptFile>>;
   saveDiagnosticPackage?: (diagnostic: DiagnosticPackage) => Promise<IniExportResult>;
@@ -419,3 +424,39 @@ declare global {
 }
 
 export {};
+
+// One MiSTer Arcade Database (mad_db.json) record, normalized by the main process; keyed by the .mra <setname>.
+export interface ArcadeDatabaseEntry {
+  name: string;
+  file?: string;
+  platform?: string;
+  platforms?: string[];
+  category?: string;
+  categories?: string[];
+  manufacturer?: string;
+  year?: number;
+  region?: string;
+  players?: string;
+  numButtons?: number;
+  rotation?: number;
+  resolution?: string;
+  moveInputs?: string[];
+  specialControls?: string[];
+  series?: string[];
+  alternative?: boolean;
+  bootleg?: boolean;
+  homebrew?: boolean;
+}
+
+export interface ArcadeDatabaseReadResult {
+  ok: boolean;
+  sessionId?: string;
+  source: 'mister' | 'cache' | 'none';
+  entries: Record<string, ArcadeDatabaseEntry>;
+  entryCount: number;
+  fetchedAt?: string;
+  sourcePath?: string;
+  readAt?: string;
+  message?: string;
+  errorCode?: string;
+}

@@ -226,8 +226,12 @@ function createLibraryEntry(entry: MiSTerScanEntry, deviceId: string, now: strin
     imageMatchKey: entry.imageMatchKey,
     imageMatchState: entry.imageMatch?.state ?? (entry.imageMatched ? 'matched' : 'unmatched'),
     imageAssetId: entry.imageMatch?.assetId,
-    orientation: 'unknown',
-    metadataSource: 'scan',
+    genre: entry.genre,
+    releaseYear: entry.releaseYear,
+    manufacturer: entry.manufacturer,
+    orientation: entry.orientation ?? 'unknown',
+    metadataSource: entry.metadataSource ?? 'scan',
+    arcade: entry.arcade,
     linkedCardIds: entry.linkedCardId ? [entry.linkedCardId] : [],
     latestCardId: entry.linkedCardId,
     hasCard: entry.hasCard,
@@ -244,6 +248,19 @@ function createLibraryEntry(entry: MiSTerScanEntry, deviceId: string, now: strin
     createdAt: now,
     updatedAt: now,
   };
+}
+
+const rawArcadeSystemIds = new Set(['arcade', 'alternatives', 'organized']);
+
+// Arcade cores are labelled from their <rbf>. When an entry that still carries the raw core name (jtcps3) or the
+// generic Arcade bucket is rescanned under a proper platform name (CPS-3), follow the scan so the platform is not
+// split into an old and a new key. A custom platform name never equals the raw rbf, so it is left alone.
+function shouldRefreshArcadePlatform(existing: ZaparooLibraryEntry, entry: MiSTerScanEntry) {
+  if (entry.platformGroup !== 'Arcade' || existing.platformGroup !== 'Arcade') return false;
+  if (!entry.systemId || entry.systemId === existing.systemId) return false;
+  const current = existing.systemId.trim().toLowerCase();
+  const rbf = entry.arcade?.rbf?.trim().toLowerCase();
+  return rawArcadeSystemIds.has(current) || (Boolean(rbf) && current === rbf);
 }
 
 function mergeLibraryEntry(existing: ZaparooLibraryEntry, entry: MiSTerScanEntry, deviceId: string, now: string): ZaparooLibraryEntry {
@@ -267,10 +284,19 @@ function mergeLibraryEntry(existing: ZaparooLibraryEntry, entry: MiSTerScanEntry
   const sourceRefs = existingRefIndex === -1
     ? [...existing.sourceRefs, sourceRef]
     : existing.sourceRefs.map((ref, index) => (index === existingRefIndex ? sourceRef : ref));
+  const refreshPlatform = shouldRefreshArcadePlatform(existing, entry);
+  const refreshMetadata = entry.metadataSource === 'external' && existing.metadataSource !== 'manual';
   return {
     ...existing,
     sourceDevices,
     sourceRefs,
+    systemId: refreshPlatform ? entry.systemId : existing.systemId,
+    genre: refreshMetadata ? entry.genre ?? existing.genre : existing.genre,
+    releaseYear: refreshMetadata ? entry.releaseYear ?? existing.releaseYear : existing.releaseYear,
+    manufacturer: refreshMetadata ? entry.manufacturer ?? existing.manufacturer : existing.manufacturer,
+    orientation: refreshMetadata && entry.orientation && entry.orientation !== 'unknown' ? entry.orientation : existing.orientation,
+    metadataSource: refreshMetadata ? 'external' : existing.metadataSource,
+    arcade: entry.arcade ? { ...existing.arcade, ...entry.arcade } : existing.arcade,
     // Titles are always path-derived (no user-custom titles), so refresh them from the fresh scan. Without
     // this, an entry scanned before a titleFromPath fix keeps its stale title forever (e.g. "04" instead of
     // "Sonic The Hedgehog") because the merge otherwise preserves the old value.
