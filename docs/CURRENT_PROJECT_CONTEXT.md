@@ -7,7 +7,7 @@ This document is the first file to read before new work on Hello Mister v2.0. It
 ## Project Paths
 
 - v2 project root: `<프로젝트 루트>`
-- v1 sticker app reference folder: `<v1 참조 폴더(zaparoo-nfc-card-stickers)>`
+- v1 sticker app (zaparoo-nfc-card-stickers): archived 2026-09-15 (GitHub `sinyeol/zaparoo-nfc-card-stickers` + local worktree zip); the only live copy is `src/features/sticker-v1`, and its behavioural tests were ported to `scripts/test-sticker-*.mjs`
 
 Rules:
 

@@ -111,7 +111,7 @@ export function buildControllerMapAnalysisExport(input: ControllerMapAnalysisExp
     exportedAt,
     app: {
       name: input.app?.name || 'Hello Mister',
-      version: input.app?.version || '2.1.0',
+      version: input.app?.version || '2.1.1',
     },
     mister: {
       profileId: input.activeProfile?.profileId || null,

@@ -19,7 +19,7 @@ export class RomDryRunReportService {
     const includeFullLocalPaths = Boolean(input.options?.includeFullLocalPaths);
     const report: RomDryRunReport = {
       schemaVersion: 1,
-      appVersion: input.record.appVersion || '2.1.0',
+      appVersion: input.record.appVersion || '2.1.1',
       generatedAt: new Date().toISOString(),
       reportType: 'rom-dry-run-validation',
       target: {

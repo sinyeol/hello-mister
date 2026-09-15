@@ -529,7 +529,7 @@ export function ControllerManagementPage() {
     if (mode === 'summary') {
       setExportMessage('메타데이터만 정리하는 중입니다. 원격 파일 bytes는 읽지 않습니다.');
       return buildControllerMapAnalysisExport({
-        app: { name: 'Hello Mister', version: '2.1.0' },
+        app: { name: 'Hello Mister', version: '2.1.1' },
         activeProfile,
         files: filesForExport,
         readResults,
@@ -584,7 +584,7 @@ export function ControllerManagementPage() {
       throw new Error('CONTROLLER_MAP_EXPORT_CANCELLED');
     }
     return buildControllerMapAnalysisExport({
-      app: { name: 'Hello Mister', version: '2.1.0' },
+      app: { name: 'Hello Mister', version: '2.1.1' },
       activeProfile,
       files: filesForExport,
       readResults,
